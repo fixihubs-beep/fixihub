@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { quote, receiptValid, csvCell } from "../lib/rules";
+import { quote, receiptValid, csvCell, postage } from "../lib/rules";
 import { initialData } from "../lib/seed";
 import {
   assertReview,
@@ -42,7 +42,19 @@ test("KACAU authoritative preview quote includes one postage charge", () => {
     now,
   );
   assert.equal(q.book_total, 60);
-  assert.equal(q.shipping_total, 8);
+  assert.equal(q.shipping_total, 5);
+});
+
+test("regional postage is flat per order and quantities above two use remaining stock", () => {
+  assert.equal(postage("MY", "Selangor"), 5);
+  assert.equal(postage("MY", "Sabah"), 10);
+  assert.equal(postage("MY", "Sarawak"), 10);
+  assert.throws(() => postage("SG", ""), /Malaysia only/);
+  assert.equal(postage("MY", "Labuan"), 10);
+  const q = quote([{ ...cart[0], quantity: 20 }], initialData.books, initialData.campaigns, now, { country: "MY", region: "Sabah" });
+  assert.equal(q.book_total, 600);
+  assert.equal(q.shipping_total, 10);
+  assert.throws(() => quote([{ ...cart[0], quantity: 20 }], initialData.books, [{ ...initialData.campaigns[0], reserved: 990 }], now), /unavailable/);
 });
 test("catalog-only books, omitted campaign and forged campaign fail closed", () => {
   assert.throws(() =>
@@ -71,7 +83,7 @@ test("catalog-only books, omitted campaign and forged campaign fail closed", () 
   );
 });
 test("invalid quantity, duplicate lines, closed/paused/full campaigns are rejected", () => {
-  for (const quantity of [0, -1, 1.5, 3])
+  for (const quantity of [0, -1, 1.5, 1001])
     assert.throws(() =>
       quote(
         [{ ...cart[0], quantity }],
@@ -180,10 +192,10 @@ test("receipt boundaries and CSV formula escaping", () => {
   for (const f of [
     { type: "text/html", size: 100 },
     { type: "image/png", size: 0 },
-    { type: "image/png", size: 6 * 1024 * 1024 },
+    { type: "image/png", size: 10 * 1024 * 1024 + 1 },
   ])
     assert.throws(() => receiptValid(f));
-  receiptValid({ type: "application/pdf", size: 100 });
+  receiptValid({ type: "application/pdf", size: 10 * 1024 * 1024 });
   assert.equal(csvCell("=SUM(A1)"), '"\'=SUM(A1)"');
   assert.equal(csvCell('A"B'), '"A""B"');
 });

@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
+import { liveCall } from "@/lib/live";
 import { useHub } from "./provider";
 import { queueAction, type QueueTicket } from "@/lib/queue";
 import { Clock, Users } from "lucide-react";
@@ -32,13 +33,20 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
   const [now, setNow] = useState(Date.now());
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
+  const offset = useRef(0);
+  const call = async (userId: string, action: "read" | "join" | "leave" = "read") => {
+    if (h.demo) return queueAction(userId, action);
+    const result = await liveCall<{ ticket: QueueTicket | null; ahead: number; server_now: number }>("queue." + action);
+    offset.current = result.server_now - Date.now();
+    return result;
+  };
   const ticket = state.owner === id ? state.ticket : null;
   useEffect(() => {
     let alive = true;
     setReady(false);
     setError("");
     async function sync() {
-      if (!id || !h.demo) {
+      if (!id || (!h.demo && !h.backendReady)) {
         if (alive) {
           setState({ ticket: null, ahead: 0 });
           setReady(true);
@@ -46,12 +54,12 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       try {
-        const result = await queueAction(id);
+        const result = await call(id);
         if (alive) {
           setState({ ...result, owner: id });
           setReady(true);
           setError("");
-          setNow(Date.now());
+          setNow(Date.now() + offset.current);
         }
       } catch (e) {
         if (alive) {
@@ -61,19 +69,21 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
       }
     }
     void sync();
-    const interval = setInterval(sync, 1000);
+    const interval = setInterval(sync, h.demo ? 1000 : 10000 + Math.floor(Math.random() * 2000));
+    const clock = setInterval(() => setNow(Date.now() + offset.current), 1000);
     return () => {
       alive = false;
       clearInterval(interval);
+      clearInterval(clock);
     };
-  }, [id, h.demo]);
+  }, [id, h.demo, h.backendReady]);
   async function join() {
-    if (!id || !h.demo) return;
+    if (!id || (!h.demo && !h.backendReady)) return;
     try {
       setError("");
-      const result = await queueAction(id, "join");
+      const result = await call(id, "join");
       setState({ ...result, owner: id });
-      setNow(Date.now());
+      setNow(Date.now() + offset.current);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -81,7 +91,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
   async function leave() {
     if (!id) return;
     try {
-      const result = await queueAction(id, "leave");
+      const result = await call(id, "leave");
       setState({ ...result, owner: id });
     } catch (e) {
       setError((e as Error).message);
@@ -155,7 +165,13 @@ export function WaitingRoom() {
   const expired = q.ticket?.state === "expired";
   return (
     <section className="queue-page">
-      <img src="/brand/buku-fixi-logo.jpg" alt="FIXI" width={64} height={64} />
+      <img
+        src="/brand/fixihublogo.jpg"
+        alt="FIXIHUB"
+        width={64}
+        height={64}
+        style={{ borderRadius: 12 }}
+      />
       <span className="eyebrow">FIXIHUB / PREORDER WAITING ROOM</span>
       <h1>
         {expired
@@ -195,10 +211,10 @@ export function WaitingRoom() {
       )}
       {!h.profile ? (
         <Link className="button primary" href="/account">
-          Choose a preview account
+          {h.demo ? "Choose a preview account" : "Sign in with Google"}
         </Link>
-      ) : !h.demo ? (
-        <p>Live queueing is not enabled yet.</p>
+      ) : !h.commerceAvailable ? (
+        <p>Preorders are not open yet. Please check back shortly.</p>
       ) : !q.ready ? (
         <p>Checking your place…</p>
       ) : q.ticket?.state === "waiting" ? (
@@ -211,8 +227,7 @@ export function WaitingRoom() {
         </button>
       )}
       <p className="fineprint">
-        Preview only: this queue is shared within this browser, not across real
-        visitors. No real payment. A queue place does not guarantee stock.
+        {h.demo ? "Preview only: this queue is shared within this browser, not across real visitors. No real payment. " : ""}A queue place does not guarantee stock.
       </p>
       <Link className="text-link" href="/catalog">
         Browse while you wait →
@@ -223,7 +238,7 @@ export function WaitingRoom() {
 export function CheckoutGate({ children }: { children: React.ReactNode }) {
   const h = useHub();
   const q = useQueue();
-  if (!h.demo || !h.profile || !h.cart.length) return <>{children}</>;
+  if (!h.commerceAvailable || !h.profile || !h.cart.length) return <>{children}</>;
   if (
     !q.ready ||
     q.ticket?.state !== "active" ||

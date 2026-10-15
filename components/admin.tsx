@@ -1,4 +1,5 @@
 "use client";
+import { PaymentSettings } from "./payment-settings";
 import { useEffect, useState } from "react";
 import {
   Check,
@@ -270,7 +271,7 @@ export function Admin() {
           <ShieldCheck />
           <div>
             <b>FIXIHUB</b>
-            <small>{h.profile?.role} · preview</small>
+            <small>{h.profile?.role} · {h.demo ? "preview" : "live"}</small>
           </div>
         </div>
         <nav aria-label="Workspace navigation">
@@ -298,7 +299,7 @@ export function Admin() {
             <br />
             1,000 copies. No reprint.
           </p>
-          <a href="/account">Switch preview identity ↗</a>
+          <a href="/account">{h.demo ? "Switch preview identity" : "Your account"} ↗</a>
         </div>
       </aside>
       <section className="admin-content">
@@ -413,9 +414,7 @@ export function Admin() {
             <div className="preview-notice">
               <ClockIcon />
               <p>
-                All figures are preview records. Payment destination and live
-                checkout are disabled. Campaign dates, postage and reservation
-                limits are provisional.
+                {h.demo ? "Preview records only. No real payments are collected." : "Shared orders and receipts. Verify each transfer against bank records before approval. Refund actions record a refund you have completed separately."}
               </p>
             </div>
             {tab === "overview" && (
@@ -788,16 +787,17 @@ export function Admin() {
             )}
           </div>
         )}
+        {tab === "security" && security && <PaymentSettings />}
         {tab === "security" && security && (
           <div className="panel">
             <h2>Launch controls</h2>
             <div className="summary-line">
               <span>Authentication</span>
-              <b>Mock only · Google deferred</b>
+              <b>{h.demo ? "Mock preview" : "Google via Supabase"}</b>
             </div>
             <div className="summary-line">
               <span>Payment destination</span>
-              <b>Not configured</b>
+              <b>{h.payment?.payee || "Not configured"}</b>
             </div>
             <div className="summary-line">
               <span>Tracking</span>
@@ -805,7 +805,7 @@ export function Admin() {
             </div>
             <div className="summary-line">
               <span>Live website checkout</span>
-              <b>Disabled</b>
+              <b>{h.commerceAvailable ? "Open" : "Closed"}</b>
             </div>
             <p className="fineprint">
               A live build fails closed while the Supabase transaction model,
@@ -1113,6 +1113,7 @@ export function Admin() {
                     busy ||
                     !checked ||
                     !receiptUrl ||
+                    h.data.orders.find((o) => o.id === payment.order_id)?.status === "payment_issue" ||
                     note.trim().length < 3 ||
                     h.data.orders.find((o) => o.id === payment.order_id)
                       ?.customer_id === h.profile?.id
@@ -1212,7 +1213,7 @@ export function Admin() {
                 Request refund review
               </button>
             )}
-            {order.status === "refund_requested" && manager && (
+            {["refund_requested", "payment_issue"].includes(order.status) && manager && (
               <button
                 className="button primary"
                 disabled={busy}
@@ -1227,7 +1228,7 @@ export function Admin() {
               </button>
             )}
           </div>
-          {order.status === "refund_requested" && (
+          {["refund_requested", "payment_issue"].includes(order.status) && (
             <p className="fineprint">
               Only record completion after the manual refund has been sent.
               Include its reference. This preview does not transfer funds.

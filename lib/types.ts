@@ -64,6 +64,7 @@ export type Order = {
   status:
     | "awaiting_payment"
     | "payment_review"
+    | "payment_issue"
     | "confirmed"
     | "preparing"
     | "cancelled"

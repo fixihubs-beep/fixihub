@@ -60,7 +60,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <span>
           {h.demo
             ? "PREVIEW · NO REAL PAYMENTS"
-            : "WEBSITE PREORDERS COMING SOON"}{" "}
+            : h.commerceAvailable ? "KACAU PREORDERS OPEN" : "WEBSITE PREORDERS COMING SOON"}{" "}
           <span className="dot" />
         </span>
       </div>
@@ -68,8 +68,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <Link className="brand" href="/" aria-label="FIXIHUB home">
           <img
             className="fixi-mark"
-            src="/brand/buku-fixi-logo.jpg"
-            alt="FIXI"
+            src="/brand/fixihublogo.jpg"
+            alt="FIXIHUB"
             width={58}
             height={58}
           />
@@ -143,8 +143,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link className="brand" href="/">
             <img
               className="fixi-mark"
-              src="/brand/buku-fixi-logo.jpg"
-              alt="FIXI"
+              src="/brand/fixihublogo.jpg"
+              alt="FIXIHUB"
               width={58}
               height={58}
             />
@@ -167,7 +167,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/admin">
             <LayoutDashboard size={15} /> Publisher workspace
           </Link>
-          {h.demo && <Link href="/account">Switch preview account</Link>}
+          
           {install && (
             <button
               onClick={async () => {

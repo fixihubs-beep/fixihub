@@ -1,4 +1,4 @@
-const CACHE='fixihub-static-v4';
+const CACHE='fixihub-static-v5';
 const ASSETS=['/offline.html','/icons/fixi-32.png','/icons/fixi-180.png','/icons/fixi-192.png','/icons/fixi-512.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});

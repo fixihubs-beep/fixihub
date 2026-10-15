@@ -12,10 +12,11 @@ export default function GlobalError({ reset }: { reset: () => void }) {
       >
         <main style={{ maxWidth: 560, margin: "12vh auto", padding: 28 }}>
           <img
-            src="/brand/buku-fixi-logo.jpg"
-            alt="FIXI"
+            src="/brand/fixihublogo.jpg"
+            alt="FIXIHUB"
             width={64}
             height={64}
+            style={{ borderRadius: 12 }}
           />
           <p style={{ fontSize: 11, letterSpacing: 2 }}>
             FIXIHUB / A PAUSE BETWEEN CHAPTERS

@@ -1,7 +1,6 @@
 import type { Data, Order, Profile } from "./types";
 export const KACAU_ID = "00000000-0000-4000-8000-000000000009";
 export const CAPACITY = 1000;
-export const COPY_LIMIT = 2;
 export const HOLD_MS = 24 * 60 * 60 * 1000;
 export const FILM_DATE = "2026-11-12T00:00:00+08:00";
 export type Permission =

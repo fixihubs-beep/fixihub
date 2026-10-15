@@ -44,6 +44,6 @@ test("mobile delivery form validates postcode and supports country changes", asy
   await expect(page.locator(".checkout-receipt .total")).toContainText("68.00");
   await expect(page).toHaveURL(/\/cart$/);
   await page.getByRole("button", { name: "Decrease quantity" }).click();
-  await expect(page.locator(".checkout-receipt .total")).toContainText("38.00");
+  await expect(page.locator(".checkout-receipt .total")).toContainText("35.00");
   await page.screenshot({ path: "docs/screenshots/checkout-receipt-desktop.png", fullPage: true });
 });

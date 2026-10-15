@@ -7,7 +7,13 @@ export function FixiLoading({
 }) {
   return (
     <div className="fixi-loading" role="status" aria-live="polite">
-      <img src="/brand/buku-fixi-logo.jpg" alt="FIXI" width={64} height={64} />
+      <img
+        src="/brand/fixihublogo.jpg"
+        alt="FIXIHUB"
+        width={64}
+        height={64}
+        style={{ borderRadius: 12 }}
+      />
       <div className="fixi-loading-track" aria-hidden="true">
         <span />
       </div>
@@ -27,10 +33,11 @@ export function FixiError({
     <section className="fixi-error-page" aria-labelledby="fixi-error-title">
       <div className="fixi-error-brand">
         <img
-          src="/brand/buku-fixi-logo.jpg"
-          alt="FIXI"
+          src="/brand/fixihublogo.jpg"
+          alt="FIXIHUB"
           width={64}
           height={64}
+          style={{ borderRadius: 12 }}
         />
         <span>HUB</span>
       </div>

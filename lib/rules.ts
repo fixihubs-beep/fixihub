@@ -1,5 +1,6 @@
+import { RECEIPT_LIMIT } from "./receipt-validation";
 import type { Book, Campaign, CartItem, Order, Payment } from "./types";
-import { KACAU_ID, COPY_LIMIT, CAPACITY } from "./preorder";
+import { KACAU_ID, CAPACITY } from "./preorder";
 export const money = (n: number) =>
   new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(
     n,
@@ -9,11 +10,16 @@ export function isOpen(c: Campaign, now = Date.now()) {
     c.active && Date.parse(c.opens_at) <= now && Date.parse(c.closes_at) >= now
   );
 }
+export function postage(country = "MY", region = "") {
+  if (country !== "MY") throw Error("Postage is currently available for Malaysia only.");
+  return ["Sabah", "Sarawak", "Labuan"].includes(region) ? 10 : 5;
+}
 export function quote(
   cart: CartItem[],
   books: Book[],
   campaigns: Campaign[],
   now = Date.now(),
+  destination?: { country: string; region: string },
 ) {
   if (!cart.length) throw Error("Your bag is empty.");
   if (cart.length > 30) throw Error("Too many items.");
@@ -30,11 +36,10 @@ export function quote(
     if (!i.campaign_id)
       throw Error("Choose the active KACAU preorder campaign.");
     if (
-      !Number.isInteger(i.quantity) ||
-      i.quantity < 1 ||
-      i.quantity > COPY_LIMIT
+      !Number.isSafeInteger(i.quantity) ||
+      i.quantity < 1
     )
-      throw Error("Choose 1–2 copies of this limited edition.");
+      throw Error("Choose a positive whole number of copies.");
     if (b.format === "ebook" && i.quantity !== 1)
       throw Error("Choose one digital entitlement per order.");
     if (i.campaign_id) {
@@ -53,8 +58,8 @@ export function quote(
     physical ||= b.format === "physical";
     return { ...i, title: b.title, format: b.format, unit_price: b.price };
   });
-  // Preview-only postage, explicitly identified in checkout. Live checkout stays disabled.
-  return { items, book_total: total, shipping_total: physical ? 8 : 0 };
+  // Flat postage per order; the remaining campaign inventory is the quantity limit.
+  return { items, book_total: total, shipping_total: physical ? postage(destination?.country, destination?.region) : 0 };
 }
 export function balance(o: Order, p: Payment[], kind: "book" | "shipping") {
   return Math.max(
@@ -71,8 +76,8 @@ export function balance(o: Order, p: Payment[], kind: "book" | "shipping") {
 export function receiptValid(file: Pick<File, "size" | "type">) {
   if (!["image/jpeg", "image/png", "application/pdf"].includes(file.type))
     throw Error("Choose a JPG, PNG or PDF receipt.");
-  if (file.size > 5 * 1024 * 1024 || file.size === 0)
-    throw Error("Receipt must be between 1 byte and 5 MB.");
+  if (file.size > RECEIPT_LIMIT || file.size === 0)
+    throw Error("Receipt must be between 1 byte and 10 MB.");
 }
 export const csvCell = (v: unknown) =>
   '"' +

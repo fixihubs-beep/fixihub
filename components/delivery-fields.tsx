@@ -51,6 +51,8 @@ export function deliveryFromForm(form: HTMLFormElement) {
   if (get("country") === "MY" && !/^\d{5}$/.test(get("postcode")))
     throw Error("Enter a five-digit Malaysian postcode.");
   return {
+    country: get("country"),
+    region: get("region"),
     phone,
     address: [
       get("recipient"),

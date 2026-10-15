@@ -12,7 +12,7 @@ export function Avatar({ profile }: { profile: Profile }) {
   useEffect(() => setFailed(false), [profile.avatar_url]);
   const safe = profile.avatar_url?.startsWith("https://");
   return <span className="profile-avatar" aria-hidden="true">
-    {safe && !failed ? <img src={profile.avatar_url} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : profile.display_name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("")}
+    {safe && !failed ? <img src={profile.avatar_url} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : profile.display_name.split("·")[0].trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("")}
   </span>;
 }
 
@@ -22,7 +22,7 @@ export function LogoutButton() {
   return <>
     <button type="button" className="text-link" onClick={() => setConfirm(true)}><LogOut size={16} /> Log out</button>
     {confirm && <Modal title="Log out of FIXIHUB?" onClose={() => { if (!busy) setConfirm(false); }}>
-      <p>Your saved profile and orders will remain. Your shopping bag will be cleared. Any active checkout timer continues; logging out does not cancel an order.</p>
+      <p>{h.demo ? "Your saved profile and orders will remain. Your shopping bag will be cleared. Any active checkout timer continues; logging out does not cancel an order." : "You will be signed out of FIXIHUB on this browser. Your Google account stays signed in, and your FIXIHUB profile will not be deleted."}</p>
       <div className="profile-actions">
         <button className="button secondary" disabled={busy} onClick={() => setConfirm(false)}>Stay signed in</button>
         <button className="button primary" disabled={busy} onClick={async () => {
@@ -55,6 +55,7 @@ export function AccountMenu() {
     {open && <div className="account-dropdown" id="account-options">
       <strong>{h.profile.display_name}</strong><small>{h.profile.email}</small>
       <Link href="/profile"><UserRound size={16} /> My profile</Link>
+      
       <LogoutButton />
     </div>}
   </div>;

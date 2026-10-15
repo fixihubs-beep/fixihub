@@ -23,12 +23,11 @@ import { BookCover } from "./book-cover";
 import { CardPreview } from "./card-preview";
 import { Bookshelf } from "./bookshelf";
 import { FILM_POSTER } from "@/lib/book-editorial";
-import { LogoutButton } from "./account-menu";
+import { GoogleLogin } from "./google-login";
 import { DeliveryFields, deliveryFromForm } from "./delivery-fields";
 import { BookSynopsis, BookInsights, FilmPoster } from "./book-editorial";
 import { isOpen, money, quote } from "@/lib/rules";
-import { can, COPY_LIMIT, FILM_DATE, KACAU_ID } from "@/lib/preorder";
-import { initialData } from "@/lib/seed";
+import { can, FILM_DATE, KACAU_ID } from "@/lib/preorder";
 import type { Order } from "@/lib/types";
 export const date = (s: string) =>
   new Date(s).toLocaleDateString("en-MY", {
@@ -416,7 +415,7 @@ export function Product({ id }: { id: string }) {
     c.reserved < c.capacity;
   const label = !featured
     ? "Currently unavailable for purchase"
-    : !h.demo
+    : !h.commerceAvailable
       ? "Website preorders opening soon"
       : !c?.active
         ? "Preorders paused"
@@ -453,11 +452,11 @@ export function Product({ id }: { id: string }) {
           {!featured && <BookSynopsis book={b} />}
           <button
             className="button primary wide"
-            disabled={!h.ready || !h.demo || !available}
+            disabled={!h.ready || !h.commerceAvailable || !available}
             onClick={() => h.add(b, c)}
           >
             {label}
-            {available && h.demo && <Plus size={18} />}
+            {available && h.commerceAvailable && <Plus size={18} />}
           </button>
           {featured && (
             <Link className="text-link cart-shortcut" href="/cart">
@@ -489,7 +488,11 @@ export function Product({ id }: { id: string }) {
                 </div>
                 <div>
                   <span>Postage</span>
-                  <b>To be confirmed before live launch</b>
+                  <b>RM5 SM / RM10 Sabah, Sarawak & Labuan</b>
+                </div>
+                <div>
+                  <span>Expected dispatch starts</span>
+                  <b>Around 1 November 2026</b>
                 </div>
               </>
             ) : (
@@ -502,9 +505,9 @@ export function Product({ id }: { id: string }) {
           {featured && h.demo && (
             <div className="source-box">
               <p>
-                Interactive preview: two copies per customer, a five-minute
-                checkout window, and RM8 sample postage. These operational
-                settings are provisional. Do not send real money.
+                Postage: RM5 Semenanjung Malaysia, RM10 Sabah/Sarawak/Labuan per order.
+                No per-account purchase limit, subject to available stock.
+                Checkout lasts five minutes. Do not send real money in preview.
               </p>
             </div>
           )}
@@ -529,7 +532,7 @@ export function Preorders() {
   const h = useHub();
   const c = h.data.campaigns.find((campaign) => campaign.book_id === KACAU_ID);
   const book = h.data.books.find((book) => book.id === KACAU_ID && book.active);
-  const state = !h.demo
+  const state = !h.commerceAvailable
     ? "opening_soon"
     : !c?.active
       ? "paused"
@@ -539,7 +542,7 @@ export function Preorders() {
           ? "open"
           : "closed";
   const available =
-    h.ready && h.demo && state === "open" && book?.sale_mode === "preorder";
+    h.ready && h.commerceAvailable && state === "open" && book?.sale_mode === "preorder";
   if (!book || !c)
     return (
       <Empty
@@ -665,15 +668,16 @@ export function Preorders() {
         <details>
           <summary>When will my book arrive?</summary>
           <p>
-            Expected publication is 1 November 2026. This is not a delivery
-            date; dispatch timing will be confirmed separately.
+            Dispatch is expected to start around 1 November 2026. This is an
+            estimate for posting, not a guaranteed arrival date.
           </p>
         </details>
         <details>
           <summary>Payment, postage & copy limits</summary>
           <p>
-            This is a preview. Do not send real money. The two-copy limit, RM8
-            sample postage and five-minute checkout window are provisional.
+            Postage is RM5 for Semenanjung Malaysia and RM10 for Sabah/Sarawak/Labuan
+            per order. There is no per-account purchase limit; stock is limited
+            to 1,000 copies overall. Checkout lasts five minutes.
             Delivery coverage and final rates will be confirmed before launch.
           </p>
         </details>
@@ -695,6 +699,8 @@ export function Cart() {
     value: string;
   } | null>(null);
   const account = h.profile?.id || "guest";
+  const [destinationDraft, setDestinationDraft] = useState<{ account: string; country: string; region: string } | null>(null);
+  const destination = destinationDraft?.account === account ? destinationDraft : { country: h.profile?.delivery?.country || "MY", region: h.profile?.delivery?.region || "" };
   const email =
     emailDraft?.account === account ? emailDraft.value : h.profile?.email || "";
   const [error, setError] = useState(""),
@@ -703,7 +709,7 @@ export function Cart() {
   let q: ReturnType<typeof quote> | null = null,
     quoteError = "";
   try {
-    if (h.cart.length) q = quote(h.cart, h.data.books, h.data.campaigns);
+    if (h.cart.length) q = quote(h.cart, h.data.books, h.data.campaigns, Date.now(), destination);
   } catch (e) {
     quoteError = (e as Error).message;
   }
@@ -726,6 +732,10 @@ export function Cart() {
       </div>
       <form
         className="checkout-grid compact-checkout"
+        onChange={(e) => {
+          const fields = new FormData(e.currentTarget);
+          setDestinationDraft({ account, country: String(fields.get("country") || "MY"), region: String(fields.get("region") || "") });
+        }}
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
@@ -734,7 +744,7 @@ export function Cart() {
             if (!navigator.onLine)
               throw Error("Reconnect before placing an order.");
             const delivery = deliveryFromForm(e.currentTarget);
-            await h.placeOrder(delivery.address, key, delivery.phone, email);
+            await h.placeOrder(delivery.address, key, delivery.phone, email, delivery);
             router.push("/orders");
           } catch (e) {
             setError((e as Error).message);
@@ -772,7 +782,6 @@ export function Cart() {
                     <button
                       type="button"
                       aria-label="Increase quantity"
-                      disabled={i.quantity >= COPY_LIMIT}
                       onClick={() =>
                         h.setCart((old) =>
                           old.map((x) =>
@@ -805,8 +814,8 @@ export function Cart() {
             );
           })}
           <p className="fineprint">
-            Expected publication: 1 November 2026. A dispatch date will be
-            confirmed separately.
+            Dispatch is expected to start around 1 November 2026, subject to
+            publication readiness. This is not a guaranteed arrival date.
           </p>
           <section
             className="checkout-details"
@@ -836,34 +845,35 @@ export function Cart() {
           <div className="receipt-brand">
             FIXI<span>HUB</span>
           </div>
-          <p className="receipt-caption">PREORDER / PREVIEW</p>
+          <p className="receipt-caption">{h.demo ? "PREORDER / PREVIEW" : "PREORDER"}</p>
           <h2>Order summary</h2>
           <div className="summary-line">
             <span>Books</span>
             <b>{money(q?.book_total || 0)}</b>
           </div>
           <div className="summary-line">
-            <span>Sample postage Â· preview only</span>
+            <span>{destination.region ? "Postage" : "Postage (from RM5; select state)"}</span>
             <b>{money(q?.shipping_total || 0)}</b>
           </div>
           <div className="summary-line total">
-            <span>Preview total</span>
+            <span>{h.demo ? "Preview total" : "Total"}</span>
             <b>{money((q?.book_total || 0) + (q?.shipping_total || 0))}</b>
           </div>
           <p className="receipt-note">
-            Preview only Â· no real payment. Use fictional details.
+            {h.demo ? "Preview only — no real payment. Use fictional details." : "Pay the exact total, then upload your receipt for verification."}
           </p>
           <details className="checkout-terms">
             <summary>Postage & reservation details</summary>
             <p>
-              RM8 sample postage, the two-copy limit and five-minute checkout
-              window are provisional. Delivery coverage and international rates
-              are not yet confirmed.
+              RM5 for Semenanjung Malaysia; RM10 for Sabah/Sarawak/Labuan per order.
+              Select your delivery state for the correct total. No per-account
+              purchase limit; quantities remain subject to available stock.
+              The checkout window is five minutes.
             </p>
           </details>
           {!h.profile && (
             <Link className="button secondary wide" href="/account">
-              Choose a preview account
+              {h.demo ? "Choose a preview account" : "Sign in with Google"}
             </Link>
           )}
           {(error || quoteError) && (
@@ -873,9 +883,9 @@ export function Cart() {
           )}
           <button
             className="button primary wide"
-            disabled={!h.demo || !h.profile || busy || !q}
+            disabled={!h.commerceAvailable || !h.profile || busy || !q}
           >
-            {busy ? "Reservingâ€¦" : "Place preview preorder"}
+            {busy ? "Reservingâ€¦" : (h.demo ? "Place preview preorder" : "Reserve & pay")}
             <ArrowRight size={17} />
           </button>
         </aside>
@@ -884,6 +894,21 @@ export function Cart() {
   );
 }
 export function PaymentInstructions({ order }: { order: Order }) {
+  const h = useHub();
+  if (!h.demo) return <div className="payment-instructions">
+    {h.paymentReady && h.payment ? <>
+      <img className="merchant-qr" src={h.payment.qr_url} alt="Merchant payment QR code" width={180} height={180} />
+      <div><span className="eyebrow">SCAN TO PAY</span><h3>{money(order.book_total + order.shipping_total)}</h3>
+        <p>Payee: <strong>{h.payment.payee}</strong></p>
+        {h.payment.bank_name && <p>Bank: <strong>{h.payment.bank_name}</strong><br />Account number: <strong>{h.payment.account_number}</strong></p>}
+        {h.payment.instructions && <p>{h.payment.instructions}</p>}
+        <p>Books {money(order.book_total)} + postage {money(order.shipping_total)}. Pay once, then upload your receipt before the timer ends.</p>
+        <p>Order reference: <strong>{order.id.slice(0,8).toUpperCase()}</strong></p>
+        <a className="text-link" href={h.payment.qr_url} download>Save payment QR</a>
+        <p className="fineprint">Payment help: {h.payment.support}. If already paid, do not pay again.</p>
+      </div>
+    </> : <p>Payment is temporarily unavailable. Do not transfer money. {h.payment?.support ? `Contact: ${h.payment.support}` : "Please check back shortly."}</p>}
+  </div>;
   return (
     <div className="payment-instructions">
       <div
@@ -897,7 +922,7 @@ export function PaymentInstructions({ order }: { order: Order }) {
         <span className="eyebrow">PAYMENT PREVIEW</span>
         <h3>{money(order.book_total + order.shipping_total)} · one transfer</h3>
         <p>
-          Books {money(order.book_total)} + sample postage{" "}
+          Books {money(order.book_total)} + postage{" "}
           {money(order.shipping_total)}.
         </p>
         <p>
@@ -1049,11 +1074,12 @@ export function Orders() {
                 ))}
                 <div className="summary-line order-total">
                   <span>
-                    Total <small>including preview postage</small>
+                    Total <small>including postage</small>
                   </span>
                   <b>{money(o.book_total + o.shipping_total)}</b>
                 </div>
                 {!closed.includes(o.status) &&
+                  o.status !== "payment_issue" &&
                   o.status !== "refund_requested" && (
                     <ol
                       className="order-progress"
@@ -1150,6 +1176,11 @@ export function Orders() {
                     </button>
                   </>
                 )}
+                {!h.demo && o.status === "expired" && <div className="order-message">
+                  <p>Already paid? Do not pay again. Submit your receipt for late-payment review; stock is not guaranteed. Payment help: {h.payment?.support || "contact the publisher"}.</p>
+                  <button className="button secondary" onClick={() => { setSelected(o); setFile(null); setReference(""); setError(""); }}>Submit already-paid receipt</button>
+                </div>}
+                {o.status === "payment_issue" && <p className="order-message">Your late payment needs staff attention because no copies were available to reserve. Do not pay again. Contact {h.payment?.support || "the publisher"} for refund assistance.</p>}
                 {o.status === "refund_requested" && (
                   <p className="order-message">
                     Your refund request is with the team. This does not mean a
@@ -1217,7 +1248,7 @@ export function Orders() {
             <p>
               One receipt for the total{" "}
               {money(selected.book_total + selected.shipping_total)}. Use
-              fictional evidence in this preview.
+              {h.demo ? "fictional evidence in this preview." : "your bank transfer receipt. Do not pay again if you already transferred the total."}
             </p>
             <label>
               Transfer reference
@@ -1232,7 +1263,7 @@ export function Orders() {
             <label className="upload-zone">
               <Upload />
               <strong>Choose a receipt</strong>
-              <span>JPG, PNG or PDF · maximum 5 MB</span>
+              <span>JPG, PNG or PDF · maximum 10 MB</span>
               <input
                 aria-label="Receipt file"
                 type="file"
@@ -1255,121 +1286,7 @@ export function Orders() {
     </div>
   );
 }
-export function Account() {
-  const h = useHub();
-  const [name, setName] = useState("");
-  return (
-    <div className="page section">
-      <div className="page-intro">
-        <span className="eyebrow">YOUR ACCOUNT</span>
-        <h1>
-          {h.profile
-            ? `Hello, ${h.profile.display_name.split(" Â· ")[0]}.`
-            : "A place for your preorder."}
-        </h1>
-        <p>
-          {h.demo
-            ? "Choose a preview identity. Each account has its own permissions and order history."
-            : "Customer login will open with website preorders."}
-        </p>
-      </div>
-      <p className="account-legal">
-        Read our <Link href="/terms">Terms of Service</Link> and{" "}
-        <Link href="/privacy">Privacy Policy</Link> for account access and how
-        your information is handled. Preview login is for testing only.
-      </p>
-      {h.demo ? (
-        <>
-          <div className="preview-notice">
-            <ShieldCheck size={20} />
-            <p>
-              Mock login only. These accounts are for testing, not real
-              authentication. Google login is deferred. Preview data and
-              uploaded files stay on this device.
-            </p>
-          </div>
-          <div className="identity-grid">
-            <button
-              className={`identity-card ${!h.profile ? "selected" : ""}`}
-              onClick={() => h.selectIdentity("")}
-            >
-              <span className="eyebrow">GUEST</span>
-              <h3>Browse the website</h3>
-              <p>Discover KACAU and the catalog.</p>
-            </button>
-            {initialData.profiles.map((p) => (
-              <button
-                className={`identity-card ${h.profile?.id === p.id ? "selected" : ""}`}
-                key={p.id}
-                onClick={() => {
-                  try {
-                    h.selectIdentity(p.id);
-                  } catch (e) {
-                    h.notify((e as Error).message);
-                  }
-                }}
-              >
-                <span className="eyebrow">{p.role}</span>
-                <h3>{p.display_name.split(" Â· ")[0]}</h3>
-                <p>
-                  {p.role === "customer"
-                    ? "Reserve copies and submit receipts."
-                    : p.role === "staff"
-                      ? "Review payments and handle orders."
-                      : p.role === "admin"
-                        ? "Manage catalog, campaigns and staff."
-                        : "Manage access and review security history."}
-                </p>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="panel">
-          <p>Real login and payment collection are not enabled yet.</p>
-        </div>
-      )}
-      {h.profile && (
-        <div className="panel profile-panel">
-          <Status value={h.profile.role} />
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              h.updateName(name).catch((e) => h.notify(e.message));
-            }}
-          >
-            <label>
-              Display name
-              <input
-                required
-                maxLength={100}
-                value={name}
-                placeholder={h.profile.display_name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-            <button className="button secondary">Save name</button>
-          </form>
-          <div className="account-links">
-            <Link href="/orders">
-              My orders <ArrowRight size={16} />
-            </Link>
-            <Link href="/cart">
-              Continue to bag <ArrowRight size={16} />
-            </Link>
-            {can(h.profile, "review") && (
-              <Link href="/admin">
-                Open workspace <ArrowRight size={16} />
-              </Link>
-            )}
-            <Link href="/profile">My profile</Link>
-            <LogoutButton />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+export function Account() { return <GoogleLogin />; }
 export function Library() {
   return (
     <Empty
@@ -1397,8 +1314,8 @@ export function About() {
       </p>
       <h2>When will it be available?</h2>
       <p>
-        Expected publication is 1 November 2026. This is not a guaranteed
-        dispatch date. The KACAU movie is scheduled for cinemas on 12 November
+        Dispatch is expected to start around 1 November 2026. This is an
+        estimate, not a guaranteed arrival date. The KACAU movie is scheduled for cinemas on 12 November
         2026.
       </p>
       <h2>How does payment work?</h2>
@@ -1409,10 +1326,9 @@ export function About() {
       </p>
       <h2>What about postage and limits?</h2>
       <p>
-        The preview uses RM8 sample postage, a two-copy customer limit and a
-        five-minute checkout reservation. Final shipping coverage, prices,
-        purchase limits and deadlines must be confirmed before live checkout
-        opens.
+        Postage is RM5 per order for Semenanjung Malaysia and RM10 for
+        Sabah/Sarawak/Labuan. There is no per-account purchase limit, subject to the
+        remaining stock of this 1,000-copy edition. Checkout lasts five minutes.
       </p>
       <h2>Can I cancel?</h2>
       <p>

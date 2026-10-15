@@ -33,7 +33,7 @@ The application now has a functioning **device-local mock workflow**, not produc
 
 The supplied KACAU jacket is integrated unchanged, with front/back views. Director, producer and cinema release are verified from the public @filemkacau Instagram biography; see KACAU-ASSETS.md. The merchant QR remains unconfigured and non-payable.
 
-Provisional preview settings: two copies per customer across active orders, 24-hour unpaid holds, 24-hour correction window after rejection, RM8 sample postage, one combined transfer, and 15–31 October 2026 campaign dates. These require confirmation before live checkout. The movie/publication dates and RM30 book price come from the supplied brief.
+Confirmed 15 October 2026: no per-account purchase cap; quantities are limited by remaining campaign stock. Flat postage per order is RM5 for Semenanjung Malaysia and RM10 for Sabah/Sarawak/Labuan. International postage is not configured. Dispatch is expected to start around 1 November 2026, not a guaranteed arrival date. Checkout leases last five minutes. Receipt corrections remain 24 hours; payment uses one combined transfer. Campaign dates remain preview configuration.
 
 ## Roles and purposes
 

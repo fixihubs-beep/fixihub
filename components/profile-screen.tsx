@@ -14,7 +14,7 @@ export function ProfileScreen() {
   const profile = h.profile;
   return <div className="page section profile-page">
     <header className="profile-heading"><Avatar profile={profile} /><div><span className="eyebrow">YOUR FIXIHUB ACCOUNT</span><h1>My profile</h1><p>{profile.display_name}</p></div></header>
-    <p className="account-legal">{h.demo ? "Preview account — changes are saved on this browser. Google sign-in is not enabled yet." : "Live account editing is not enabled yet."}</p>
+    <p className="account-legal">{h.demo ? "Preview account — changes are saved on this browser. Google sign-in is not enabled yet." : "Signed in securely with Google. Your account email comes from Google."}</p>
     {error && <p className="notice error" role="alert">{error}</p>}
     <div className="profile-grid">
       <section className="panel">
@@ -26,16 +26,16 @@ export function ProfileScreen() {
         }}>
           <label>Display name<input name="displayName" defaultValue={profile.display_name} maxLength={100} required autoComplete="name" /></label>
           <label>Account email<input type="email" value={profile.email || ""} readOnly /></label>
-          <p className="muted">When Google login opens, your name, photo and account email will come from Google. Changing your FIXIHUB display name will not change your Google account.</p>
-          <button className="button primary" disabled={!h.demo}>Save details</button>
+          <p className="muted">Your name, photo and account email come from your sign-in provider. Changing your FIXIHUB display name will not change your Google account.</p>
+          <button className="button primary">Save details</button>
         </form>
-        <nav className="profile-shortcuts" aria-label="Profile shortcuts"><Link href="/orders">My orders →</Link><Link href="/privacy">Privacy Policy →</Link>{h.demo && <Link href="/account">Switch preview account →</Link>}</nav>
+        <nav className="profile-shortcuts" aria-label="Profile shortcuts"><Link href="/orders">My orders →</Link><Link href="/privacy">Privacy Policy →</Link></nav>
         <LogoutButton />
       </section>
       <section className="panel">
         <h2>Contact & saved address</h2>
-        <p>Save your delivery details to fill checkout automatically. Changes here do not alter existing orders.</p>
-        <form key={`${profile.id}-${addressVersion}`} onSubmit={async e => {
+        <p>{h.backendReady ? "Save your delivery details to fill checkout automatically. Changes here do not alter existing orders." : "Saved delivery addresses will be available when the order database is connected. You do not need to enter an address to sign in."}</p>
+        {h.backendReady && <form key={`${profile.id}-${addressVersion}`} onSubmit={async e => {
           e.preventDefault(); setError("");
           try {
             deliveryFromForm(e.currentTarget);
@@ -46,12 +46,12 @@ export function ProfileScreen() {
           } catch(e) { setError((e as Error).message); }
         }}>
           <DeliveryFields initial={profile.delivery || { recipient: profile.display_name }} />
-          <div className="profile-actions"><button className="button primary" disabled={!h.demo}>Save address</button>
+          <div className="profile-actions"><button className="button primary" disabled={!h.backendReady}>Save address</button>
           {profile.delivery && <button type="button" className="button secondary" onClick={async () => {
             try { await h.saveDelivery(undefined); setAddressVersion(v => v + 1); setError(""); }
             catch(e) { setError((e as Error).message); }
           }}>Remove saved address</button>}</div>
-        </form>
+        </form>}
       </section>
     </div>
   </div>;
