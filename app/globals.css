@@ -7746,3 +7746,31 @@ body:has(.queue-floating) { padding-bottom: 110px; }
 .merchant-settings { display: grid; gap: 16px; max-width: 640px; }
 .merchant-settings label:not(.checkbox) { display: grid; gap: 6px; }
 .merchant-settings input, .merchant-settings textarea { min-width: 0; max-width: 100%; }
+.google-login-page { max-width: 1000px; padding-top: 28px; }
+.login-back { display: inline-flex; gap: 8px; align-items: center; min-height: 44px; font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+.login-layout { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); background: var(--surface); }
+.login-intro { padding: 38px; background: var(--soft); display: flex; flex-direction: column; align-items: flex-start; }
+.login-intro > img { margin-bottom: 30px; }
+.login-intro h1 { font-size: clamp(32px,4vw,46px); line-height: 1.1; letter-spacing: -.045em; margin: 16px 0; }
+.login-intro p { color: var(--muted); max-width: 30ch; }
+.login-edition { font-size: 9px; letter-spacing: .1em; color: var(--muted); padding-top: 35px; }
+.google-login-page .login-card { border: 0; margin: 0; padding: 38px; align-self: center; min-width: 0; }
+.login-card h2 { margin: 12px 0; font-size: 23px; letter-spacing: -.04em; }
+.login-card > p { color: var(--muted); }
+.login-card .google-signin { background: #fff; color: #1f1f1f; border: 1px solid #747775; min-height: 52px; gap: 12px; border-radius: 5px; margin: 20px 0 14px; }
+.login-card .google-signin:hover { background: #f2f2f2; }
+.login-security { display: flex; gap: 8px; font-size: 12px; align-items: flex-start; }
+.login-security svg { flex-shrink: 0; margin-top: 2px; }
+.login-card .account-legal { font-size: 11px; margin: 24px 0 0; line-height: 1.7; }
+.login-store-note { margin-top: 16px; font-size: 12px; }
+@media(max-width:640px) {
+ .google-login-page { padding-top: 12px; }
+ .login-back { margin-bottom: 12px; }
+ .login-layout { grid-template-columns: minmax(0,1fr); }
+ .login-intro { padding: 22px; }
+ .login-intro > img { width: 40px; height: 40px; margin-bottom: 18px; }
+ .login-intro h1 { margin: 10px 0; font-size: 34px; }
+ .login-intro p { margin: 4px 0 0; }
+ .login-edition { display: none; }
+ .google-login-page .login-card { padding: 22px; }
+}

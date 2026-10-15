@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { verifiedGoogleProfile, finishGoogleCallback } from "@/lib/auth";
+import { verifiedGoogleProfile, finishGoogleCallback, hasGoogleCallback } from "@/lib/auth";
 import { liveCall, paymentSettings, submitLiveReceipt, type LiveSnapshot, type PaymentSetup } from "@/lib/live";
 import { initialData } from "@/lib/seed";
 import { withBookCover } from "@/lib/covers";
@@ -71,7 +71,7 @@ export function Provider({ children }: { children: React.ReactNode }) {
   const [backendReady, setBackendReady] = useState(false), [serverReady, setServerReady] = useState(false);
   const [payment, setPayment] = useState<PaymentSetup | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const owner = useRef<string | null>(null), generation = useRef(0), alive = useRef(false), cartLoaded = useRef(false);
+  const owner = useRef<string | null>(null), generation = useRef(0), alive = useRef(false), cartLoaded = useRef(false), initializing = useRef(true);
   async function refresh(callback = false) {
     const version = ++generation.current;
     try {
@@ -107,14 +107,15 @@ export function Provider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     alive.current = true;
     // Legacy mock identities are never read or accepted as credentials.
-    sessionStorage.removeItem("fixihub-preview-identity");
-    void refresh(window.location.pathname === "/auth/callback");
+    try { sessionStorage.removeItem("fixihub-preview-identity"); } catch {}
+    initializing.current = true;
+    void refresh(hasGoogleCallback()).finally(() => { if (alive.current) initializing.current = false; });
     const subscription = supabase?.auth.onAuthStateChange(event => {
-      if (event === "INITIAL_SESSION") return;
+      if (event === "INITIAL_SESSION" || initializing.current) return;
       if (event === "SIGNED_OUT") {
         ++generation.current; owner.current = null; setProfile(null); setData(emptyData()); setCart([]); setPayment(null); setBackendReady(false); setError("");
       }
-      if (event !== "SIGNED_IN" || window.location.pathname !== "/auth/callback") setTimeout(() => { if (alive.current) void refresh(); }, 0);
+      setTimeout(() => { if (alive.current) void refresh(); }, 0);
     });
     return () => { alive.current = false; ++generation.current; subscription?.data.subscription.unsubscribe(); };
   }, []);

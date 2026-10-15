@@ -12,21 +12,37 @@ export function googleProfile(user: User): Profile | null {
   return { id: user.id, email: user.email, display_name: name?.slice(0, 100) || "Reader", avatar_url: avatar, role: "customer", active: true };
 }
 
+// One exchange per returned code, including React's development effect replay.
 let exchange: Promise<void> | undefined;
+let exchangeCode: string | null = null;
+let exchangePending = false;
+export function hasGoogleCallback() {
+  const url = new URL(window.location.href);
+  return exchangePending || url.pathname === "/auth/callback" || url.searchParams.has("code") || url.searchParams.has("error");
+}
 export async function finishGoogleCallback() {
-  if (exchange) return exchange;
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("code");
+  if (exchange && (!code || code === exchangeCode)) return exchange;
+  exchangeCode = code;
+  exchangePending = true;
   exchange = (async () => {
     if (!supabase) throw Error("Sign-in is not configured. Please try again later.");
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const denied = params.has("error") || new URLSearchParams(window.location.hash.slice(1)).has("error");
-    // Remove one-time credentials and provider errors from browser history.
-    window.history.replaceState({}, "", "/auth/callback");
+    const denied = url.searchParams.has("error") || new URLSearchParams(url.hash.slice(1)).has("error");
+    for (const key of ["code", "error", "error_code", "error_description"]) url.searchParams.delete(key);
+    window.history.replaceState(window.history.state, "", url.pathname + url.search);
     if (denied) throw Error("Google sign-in was cancelled or declined. Please try again.");
-    if (!code) throw Error("This sign-in link is missing or expired. Please start again.");
+    if (!code) {
+      // Reloading a completed callback must not discard an existing session.
+      if (await verifiedGoogleProfile()) return;
+      throw Error("This sign-in link is missing or expired. Please start again.");
+    }
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) throw Error("This sign-in link could not be verified. Start again in the same browser.");
-  })();
+    if (error) {
+      if (await verifiedGoogleProfile()) return;
+      throw Error("This sign-in link could not be verified. Start again in the same browser and website address.");
+    }
+  })().finally(() => { exchangePending = false; });
   return exchange;
 }
 
