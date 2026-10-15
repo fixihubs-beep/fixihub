@@ -44,6 +44,22 @@ test('live commerce enforces identity, stock, postage, private receipts and staf
  await db.exec('reset role');await db.query("update fixihub_live.profiles set role='staff' where id=$1",[ids[1]]);
  await as(ids[1]);await call('payment.review',{id:snap.payments[0].id,approve:true,note:'Bank checked',bank_checked:true});
  await as(ids[0]);assert.equal((await call('snapshot')).orders[0].status,'confirmed');
+ // Verify administrative mutations through the real SQL boundary, not only hidden UI.
+ const bookId='00000000-0000-4000-8000-000000000009';
+ await assert.rejects(call('catalog.update',{id:bookId,title:'KACAU',author:'Ariff Adly',description:'Edition',active:true}),/Admin/);
+ await assert.rejects(call('campaign.update',{active:false}),/Admin/);
+ await as(ids[2]);await call('snapshot');
+ await db.exec('reset role');await db.query("update fixihub_live.profiles set role='admin' where id=$1",[ids[1]]);
+ await as(ids[1]);
+ await call('catalog.update',{id:bookId,title:'KACAU: Movie Tie-In',author:'Ariff Adly',description:'Updated edition description',active:true});
+ assert.equal((await call('snapshot')).books.find((b:any)=>b.id===bookId).description,'Updated edition description');
+ await assert.rejects(call('access.update',{id:ids[2],role:'superadmin',active:true}),/Superadmin/);
+ await call('access.update',{id:ids[2],role:'staff',active:true});
+ await as(ids[2]);assert.equal((await call('snapshot')).profile.role,'staff');
+ await as(ids[1]);
+ await call('campaign.update',{active:false,opens_at:new Date(Date.now()-86400000).toISOString(),closes_at:new Date(Date.now()+86400000).toISOString()});
+ assert.equal((await call('snapshot')).payment.enabled,false);
+ await call('campaign.update',{active:true,opens_at:new Date(Date.now()-86400000).toISOString(),closes_at:new Date(Date.now()+86400000).toISOString()});
  // A full queue never admits a 51st simultaneous active customer.
  await db.exec("reset role; update fixihub_live.queue set state='complete'");
  for(let i=10;i<61;i++) {
