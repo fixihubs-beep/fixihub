@@ -1,266 +1,430 @@
 "use client";
-import { coverSource } from "@/lib/covers";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  ArrowRight,
   ArrowUpRight,
-  Search,
-  SlidersHorizontal,
-  Plus,
-  Minus,
-  Trash2,
-  Package,
-  ShieldCheck,
-  Truck,
+  ArrowRight,
   BookOpen,
-  Upload,
   Check,
   Clock,
-  Download,
+  Film,
+  Minus,
+  Plus,
+  QrCode,
+  ShieldCheck,
+  ShoppingBag,
+  Trash2,
+  Upload,
 } from "lucide-react";
 import { useHub } from "./provider";
 import { BookCard, Empty, Modal, Status } from "./ui";
 import { BookCover } from "./book-cover";
-import { Viewer } from "./viewer";
-import { balance, isOpen, money, quote } from "@/lib/rules";
-import { Book, Order } from "@/lib/types";
-const date = (s: string) =>
+import { CardPreview } from "./card-preview";
+import { Bookshelf } from "./bookshelf";
+import { FILM_POSTER } from "@/lib/book-editorial";
+import { LogoutButton } from "./account-menu";
+import { DeliveryFields, deliveryFromForm } from "./delivery-fields";
+import { BookSynopsis, BookInsights, FilmPoster } from "./book-editorial";
+import { isOpen, money, quote } from "@/lib/rules";
+import { can, COPY_LIMIT, FILM_DATE, KACAU_ID } from "@/lib/preorder";
+import { initialData } from "@/lib/seed";
+import type { Order } from "@/lib/types";
+export const date = (s: string) =>
   new Date(s).toLocaleDateString("en-MY", {
     day: "numeric",
     month: "short",
     year: "numeric",
     timeZone: "Asia/Kuala_Lumpur",
   });
-export function Home() {
-  const h = useHub(),
-    books = h.data.books.filter((b) => b.active);
-  if (!h.ready)
-    return <div className="page section">Loading the bookshelf...</div>;
-  if (!books.length)
-    return (
-      <Empty
-        title="The bookshelf is being prepared."
-        text="No active titles are available. Please check back after the catalog is populated."
-        href="/about"
-        label="About FIXIHUB"
-      />
-    );
+const time = (s: string) =>
+  new Date(s).toLocaleString("en-MY", {
+    timeZone: "Asia/Kuala_Lumpur",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+function Countdown() {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const remaining =
+    now === null ? null : Math.max(0, Date.parse(FILM_DATE) - now);
+  if (remaining === 0) return <p className="cinema-live">Now in cinemas</p>;
   return (
-    <div className="home">
-      <section className="hero">
-        <div className="hero-copy">
-          <div className="eyebrow">
-            <span className="mini-line" /> BUKU FIXI / FICTION WITHOUT LIMITS
-          </div>
-          <h1>
-            Cerita tanpa
-            <br />
-            <em>sempadan.</em>
-          </h1>
-          <p>
-            Unfamiliar worlds. Unforgettable voices.
-            <br />
-            Find your next Malaysian read, right here.
-          </p>
-          <div className="hero-buttons">
-            <Link className="button primary" href="/catalog">
-              Explore the books <ArrowUpRight size={18} />
-            </Link>
-            <Link className="text-link" href="/preorders">
-              Get there first <ArrowRight size={17} />
-            </Link>
-          </div>
-          <div className="hero-foot">
-            <span className="round-star">✳</span>
-            <span>
-              LOCAL VOICES.
-              <br />
-              <b>LIMITLESS IMAGINATION.</b>
-            </span>
-          </div>
+    <div
+      className="film-countdown"
+      aria-label="Countdown to 12 November 2026 in Malaysia"
+    >
+      {[
+        [remaining === null ? "â€”" : Math.floor(remaining / 86400000), "days"],
+        [
+          remaining === null ? "â€”" : Math.floor(remaining / 3600000) % 24,
+          "hours",
+        ],
+        [
+          remaining === null ? "â€”" : Math.floor(remaining / 60000) % 60,
+          "minutes",
+        ],
+        [
+          remaining === null ? "â€”" : Math.floor(remaining / 1000) % 60,
+          "seconds",
+        ],
+      ].map(([value, label]) => (
+        <div key={label}>
+          <strong>{value}</strong>
+          <span>{label}</span>
         </div>
-        <div className="hero-art">
-          <span className="orbit-text">
-            MALAYSIAN VOICES. UNEXPECTED WORLDS.
+      ))}
+    </div>
+  );
+}
+export function Home() {
+  const h = useHub();
+  const book = h.data.books.find((b) => b.id === KACAU_ID)!;
+  return (
+    <div className="home kacau-home">
+      <section className="kacau-hero">
+        <div className="kacau-copy">
+          <span className="eyebrow">
+            FEATURED PREORDER / KACAU: MOVIE TIE-IN
           </span>
-          <div className="hero-orbit" />
-          <Viewer book={books[0] || h.data.books[0]} hero />
-          <span className="edition-pill">THE FIXIHUB EDIT / 01</span>
+          <h1>
+            <img
+              className="kacau-title-art"
+              src="/covers/kacau-title.png"
+              alt="KACAU â€” Edisi Terhad Movie Tie-In"
+              fetchPriority="high"
+            />
+            <span>
+              From page
+              <br />
+              to screen.
+            </span>
+          </h1>
+          <p className="hero-description">
+            One story. A limited edition. <br />
+            1,000 copies. No reprint.
+          </p>
+          <div className="kacau-facts">
+            <strong>RM30</strong>
+            <span>Ariff Adly</span>
+            <span>328 pages</span>
+          </div>
+          <div className="hero-action-row">
+            <Link className="button primary" href={`/books/${KACAU_ID}`}>
+              Discover the preorder <ArrowUpRight size={18} />
+            </Link>
+            <a className="text-link" href="#film">
+              The movie <ArrowRight size={16} />
+            </a>
+          </div>
+          <p className="release-note">
+            Expected publication Â· 1 November 2026
+          </p>
+        </div>
+        <div className="kacau-art">
+          <div className="edition-number">EDISI TERHAD / MOVIE TIE-IN</div>
+          <Link
+            className="hero-book-link"
+            href={`/books/${KACAU_ID}`}
+            aria-label="Explore KACAU: Movie Tie-In"
+          >
+            <BookCover book={book} priority />
+          </Link>
+          <p className="hero-edition-caption">
+            <span>THE MOVIE TIE-IN EDITION</span>
+            <b>1,000 copies. Yours to keep.</b>
+          </p>
+          <span className="art-label">
+            A STORY THAT DOESNâ€™T STAY ON THE PAGE.
+          </span>
         </div>
       </section>
       <div className="value-strip">
         <span>
-          <BookOpen size={17} /> Malaysian stories, in one place
+          <BookOpen size={17} /> 328 pages
         </span>
         <span>
-          <ShieldCheck size={17} /> Track every payment
+          <ShieldCheck size={17} /> Only 1,000 copies
         </span>
         <span>
-          <Package size={17} /> Orders with a clear next step
-        </span>
-        <span className="strip-note">
-          YOUR NEXT CHAPTER STARTS HERE <ArrowDownIcon />
+          <Clock size={17} /> Expected 1 November 2026
         </span>
       </div>
+      <Bookshelf books={h.data.books.filter((b) => b.active)} />
+      <section
+        className="film-panel"
+        id="film"
+        style={{
+          backgroundImage: `linear-gradient(90deg, rgba(6, 18, 15, .78), rgba(12, 12, 21, .82)), url("${FILM_POSTER.image}")`,
+        }}
+      >
+        <FilmPoster />
+        <div>
+          <span className="eyebrow">
+            <Film size={16} /> KACAU / THE MOVIE
+          </span>
+          <h2>
+            See you
+            <br />
+            in the dark.
+          </h2>
+          <p>
+            In cinemas <strong>12 November 2026</strong>
+          </p>
+          <p className="fineprint">First, the book. Then, the big screen.</p>
+          <dl className="film-credits">
+            <div>
+              <dt>Directed by</dt>
+              <dd>Muzzamer Rahman</dd>
+            </div>
+            <div>
+              <dt>Produced by</dt>
+              <dd>Le Mediator Studio</dd>
+            </div>
+          </dl>
+          <a
+            className="text-link film-social"
+            href="https://www.instagram.com/filemkacau/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Explore @filemkacau <ArrowUpRight size={16} />
+          </a>
+        </div>
+        <div>
+          <span className="eyebrow">COUNTDOWN TO CINEMA RELEASE</span>
+          <Countdown />
+          <p className="fineprint">
+            Release date in Malaysia. Screening times may vary.
+          </p>
+        </div>
+      </section>
       <section className="section">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">PICK YOUR NEXT OBSESSION</span>
-            <h2>Off the shelf. Into your world.</h2>
+            <span className="eyebrow">MORE FROM THE BOOKSHELF</span>
+            <h2>Explore all books.</h2>
+            <p>
+              Other titles are on display, with purchasing currently
+              unavailable.
+            </p>
           </div>
           <Link className="text-link" href="/catalog">
-            Browse all books <ArrowUpRight size={18} />
+            All books <ArrowUpRight size={17} />
           </Link>
         </div>
         <div className="book-grid">
-          {books.slice(0, 4).map((b) => (
-            <BookCard key={b.id} book={b} />
-          ))}
+          {h.data.books
+            .filter((b) => b.active)
+            .map((b) => (
+              <BookCard key={b.id} book={b} />
+            ))}
         </div>
       </section>
-      <section className="preorder-banner">
-        <div>
-          <span className="eyebrow">BE PART OF THE FIRST CHAPTER</span>
-          <h2>
-            Some stories are
-            <br />
-            worth the wait.
-          </h2>
-          <p>
-            Reserve a copy. Follow its journey.
-            <br />
-            Keep book and postage payments in one place.
-          </p>
-          <Link href="/preorders" className="button primary">
-            Discover preorders <ArrowUpRight size={17} />
-          </Link>
-        </div>
-        <div className="banner-art">
-          <span>
-            COMING
-            <br />
-            <i>SOON.</i>
-          </span>
-          <div className="banner-circle">
-            FIRST
-            <br />
-            EDITION
-            <br />↗
+      <section className="section how-it-works">
+        <span className="eyebrow">YOUR PREORDER, STEP BY STEP</span>
+        <h2>Reserve. Pay. Stay updated.</h2>
+        <details className="preorder-steps">
+          <summary>
+            How preordering works <Plus size={16} />
+          </summary>
+          <div className="steps-grid">
+            {[
+              [
+                "01",
+                "Reserve your copy",
+                "Choose your quantity and confirm your delivery details.",
+              ],
+              [
+                "02",
+                "Submit payment evidence",
+                "Pay using the merchant QR, then upload your receipt.",
+              ],
+              [
+                "03",
+                "We verify your payment",
+                "Staff checks the transfer and confirms your preorder.",
+              ],
+              [
+                "04",
+                "Follow your order",
+                "See updates in your account while you await publication.",
+              ],
+            ].map(([n, title, text]) => (
+              <article key={n}>
+                <span>{n}</span>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            ))}
           </div>
-        </div>
+        </details>
+        <Link className="text-link" href="/about">
+          Preorder questions and launch details <ArrowRight size={16} />
+        </Link>
       </section>
     </div>
   );
 }
-function ArrowDownIcon() {
-  return <span aria-hidden="true">↓</span>;
-}
 export function Catalog() {
-  const h = useHub(),
-    [search, setSearch] = useState(""),
-    [category, setCategory] = useState("All books"),
-    [sort, setSort] = useState("featured");
-  const categories = [
-    "All books",
-    ...new Set(h.data.books.filter((b) => b.active).map((b) => b.category)),
-  ];
-  const books = useMemo(
-    () =>
-      h.data.books
-        .filter(
-          (b) =>
-            b.active &&
-            (category === "All books" || b.category === category) &&
-            (b.title + " " + b.author)
-              .toLowerCase()
-              .includes(search.toLowerCase()),
-        )
-        .sort((a, b) =>
-          sort === "low"
-            ? a.price - b.price
-            : sort === "az"
-              ? a.title.localeCompare(b.title)
-              : 0,
-        ),
-    [h.data.books, category, search, sort],
-  );
+  const h = useHub();
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("featured");
+  const [category, setCategory] = useState("all");
+  const active = h.data.books.filter((book) => book.active);
+  const categories = [...new Set(active.map((book) => book.category))].sort();
+  const books = active
+    .filter(
+      (book) =>
+        `${book.title} ${book.author}`
+          .toLowerCase()
+          .includes(search.trim().toLowerCase()) &&
+        (category === "all" || book.category === category),
+    )
+    .sort((a, b) =>
+      sort === "az"
+        ? a.title.localeCompare(b.title)
+        : Number(b.id === KACAU_ID) - Number(a.id === KACAU_ID),
+    );
+  const filtered = search !== "" || category !== "all";
+  function reset() {
+    setSearch("");
+    setCategory("all");
+  }
   return (
-    <div className="page section">
-      <div className="page-intro">
-        <span className="eyebrow">THE CATALOG</span>
-        <h1>A shelf less ordinary.</h1>
-        <p>Follow your curiosity. Find a story that stays.</p>
-      </div>
-      <div className="catalog-tools">
-        <label className="search-field">
-          <Search size={19} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search titles or authors"
-            aria-label="Search titles or authors"
-          />
-        </label>
-        <label className="sort">
-          <SlidersHorizontal size={17} />
-          <select
-            aria-label="Sort books"
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-          >
-            <option value="featured">Featured</option>
-            <option value="low">Price: low to high</option>
-            <option value="az">Title: A–Z</option>
-          </select>
-        </label>
-      </div>
-      <div className="filter-row">
-        {categories.map((c) => (
+    <div className="page section catalog-page">
+      <header className="catalog-heading">
+        <div>
+          <span className="eyebrow">THE FIXIHUB BOOKSHELF</span>
+          <h1>All books.</h1>
+          <p>Find your next Malaysian story.</p>
+        </div>
+        <span className="catalog-count">{active.length} titles</span>
+      </header>
+      <Link href="/preorders" className="catalog-preorder-note">
+        <span>
+          <b>KACAU: Movie Tie-In</b> <span>Featured preorder · RM30</span>
+        </span>
+        <ArrowUpRight size={18} />
+      </Link>
+      <div className="catalog-controls">
+        <div className="catalog-tools">
+          <label className="search-field">
+            <span className="catalog-field-label">Search the bookshelf</span>
+            <input
+              type="search"
+              aria-label="Search titles or authors"
+              placeholder="Title or author…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+          <label className="sort">
+            Sort
+            <select
+              aria-label="Sort books"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+            >
+              <option value="featured">Featured first</option>
+              <option value="az">Title: A–Z</option>
+            </select>
+          </label>
+        </div>
+        <div
+          className="catalog-categories"
+          role="group"
+          aria-label="Filter by genre"
+        >
           <button
-            className={c === category ? "chip selected" : "chip"}
-            key={c}
-            onClick={() => setCategory(c)}
+            type="button"
+            aria-pressed={category === "all"}
+            onClick={() => setCategory("all")}
           >
-            {c}
+            All genres
           </button>
-        ))}
-        <span>{books.length} books</span>
+          {categories.map((genre) => (
+            <button
+              key={genre}
+              type="button"
+              aria-pressed={category === genre}
+              onClick={() => setCategory(genre)}
+            >
+              {genre}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="catalog-results">
+        <span role="status">
+          {books.length} {books.length === 1 ? "book" : "books"}
+          {filtered ? " found" : " to explore"}
+        </span>
+        {filtered ? (
+          <button type="button" onClick={reset}>
+            Clear filters
+          </button>
+        ) : (
+          <span>Other titles · browsing only</span>
+        )}
       </div>
       {books.length ? (
         <div className="book-grid">
-          {books.map((b) => (
-            <BookCard book={b} key={b.id} />
+          {books.map((book) => (
+            <BookCard key={book.id} book={book} />
           ))}
         </div>
       ) : (
-        <Empty
-          title="No stories found."
-          text="Try another title, author or category."
-        />
+        <div className="catalog-empty">
+          <BookOpen size={28} />
+          <h2>No matching stories.</h2>
+          <p>Try another title, author or genre.</p>
+          <button type="button" className="button secondary" onClick={reset}>
+            Show all books
+          </button>
+        </div>
       )}
-      <p className="fineprint">
-        All prices and availability are demo values. Public title/author
-        metadata is credited on each book page.
-      </p>
     </div>
   );
 }
 export function Product({ id }: { id: string }) {
-  const h = useHub(),
-    b = h.data.books.find((b) => b.id === id && b.active);
-  if (!h.ready) return <div className="page section">Loading book…</div>;
+  const h = useHub();
+
+  const b = h.data.books.find(
+    (b) => (b.id === id || b.slug === id) && b.active,
+  );
   if (!b)
     return (
       <Empty
         title="Book not found"
-        text="This title may have been archived."
+        text="This title may no longer be displayed."
         href="/catalog"
-        label="Back to catalog"
+        label="Browse books"
       />
     );
-  const c = h.data.campaigns.find((c) => c.book_id === b.id && isOpen(c));
+  const c = h.data.campaigns.find((c) => c.book_id === b.id);
+  const featured = b.id === KACAU_ID;
+  const available =
+    featured &&
+    b.sale_mode === "preorder" &&
+    c &&
+    isOpen(c) &&
+    c.reserved < c.capacity;
+  const label = !featured
+    ? "Currently unavailable for purchase"
+    : !h.demo
+      ? "Website preorders opening soon"
+      : !c?.active
+        ? "Preorders paused"
+        : c.reserved >= c.capacity
+          ? "Sold out"
+          : !isOpen(c)
+            ? "Outside preorder window"
+            : "Reserve a copy";
   return (
     <div className="page section">
       <div className="breadcrumbs">
@@ -270,76 +434,92 @@ export function Product({ id }: { id: string }) {
       </div>
       <div className="product-grid">
         <div className="product-art">
-          <Viewer book={b} />
+          <div className="product-preview">
+            <CardPreview book={b} detail />
+          </div>
         </div>
         <div className="product-copy">
           <span className="eyebrow">
-            {b.category} ·{" "}
-            {b.format === "ebook" ? "DIGITAL EDITION" : "PAPERBACK"}
+            {featured ? "LIMITED EDITION / NO REPRINT" : "FROM THE CATALOG"}
           </span>
           <h1>{b.title}</h1>
           <p className="author">by {b.author}</p>
-          <div className="product-price">
-            {money(b.price)} <small>Demo price</small>
-          </div>
-          <p>{b.description}</p>
+          {featured && (
+            <div className="product-price">
+              {money(b.price)} <small>per copy Â· postage additional</small>
+            </div>
+          )}
+          {featured && <p>{b.description}</p>}
+          {!featured && <BookSynopsis book={b} />}
           <button
             className="button primary wide"
-            disabled={!c && b.format === "physical" && b.stock === 0}
+            disabled={!h.ready || !h.demo || !available}
             onClick={() => h.add(b, c)}
           >
-            {c ? "Reserve a copy" : "Add to bag"} <Plus size={18} />
+            {label}
+            {available && h.demo && <Plus size={18} />}
           </button>
+          {featured && (
+            <Link className="text-link cart-shortcut" href="/cart">
+              View your bag <ShoppingBag size={16} />
+            </Link>
+          )}
           <div className="product-details">
-            <div>
-              <span>Availability</span>
-              <b>
-                {c
-                  ? "Open for preorder"
-                  : b.format === "ebook"
-                    ? "Entitlement record only"
-                    : b.stock + " demo copies"}
-              </b>
-            </div>
-            <div>
-              <span>Postage</span>
-              <b>
-                {b.format === "ebook"
-                  ? "Not required"
-                  : "RM8 / order · paid separately"}
-              </b>
-            </div>
-            <div>
-              <span>Artwork</span>
-              <b>
-                {coverSource(b) && b.cover_image === coverSource(b)?.path
-                  ? "Published book cover"
-                  : b.provenance === "demo"
-                    ? "Original demo artwork"
-                    : "Catalog artwork"}
-              </b>
-            </div>
+            {featured ? (
+              <>
+                <div>
+                  <span>Pages</span>
+                  <b>328</b>
+                </div>
+                <div>
+                  <span>Reading audience</span>
+                  <b>For mature readers</b>
+                </div>
+                <div>
+                  <span>Expected publication</span>
+                  <b>1 November 2026</b>
+                </div>
+                <div>
+                  <span>Print run</span>
+                  <b>1,000 copies Â· no reprint</b>
+                </div>
+                <div>
+                  <span>Cinema release</span>
+                  <b>12 November 2026</b>
+                </div>
+                <div>
+                  <span>Postage</span>
+                  <b>To be confirmed before live launch</b>
+                </div>
+              </>
+            ) : (
+              <div>
+                <span>Availability</span>
+                <b>Browsing only</b>
+              </div>
+            )}
           </div>
-          <div className="source-box">
-            <ShieldCheck size={20} />
-            <div>
-              <b>
-                {b.provenance === "public_metadata"
-                  ? "Public title & author metadata"
-                  : "Invented demonstration title"}
-              </b>
+          {featured && h.demo && (
+            <div className="source-box">
               <p>
-                Prices, stock and categories are demo data. Published covers
-                remain the property of their respective rights holders. No ebook
-                files are included.
+                Interactive preview: two copies per customer, a five-minute
+                checkout window, and RM8 sample postage. These operational
+                settings are provisional. Do not send real money.
               </p>
-              {b.source_url && (
-                <a href={b.source_url} target="_blank" rel="noreferrer">
-                  View public source <ArrowUpRight size={13} />
-                </a>
-              )}
             </div>
-          </div>
+          )}
+          {featured && <BookSynopsis book={b} />}
+          <BookInsights book={b} />
+          {!featured && b.source_url && (
+            <a
+              className="text-link cart-shortcut"
+              href={b.source_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Book information source <ArrowUpRight size={14} />
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -347,76 +527,178 @@ export function Product({ id }: { id: string }) {
 }
 export function Preorders() {
   const h = useHub();
+  const c = h.data.campaigns.find((campaign) => campaign.book_id === KACAU_ID);
+  const book = h.data.books.find((book) => book.id === KACAU_ID && book.active);
+  const state = !h.demo
+    ? "opening_soon"
+    : !c?.active
+      ? "paused"
+      : c.reserved >= c.capacity
+        ? "sold_out"
+        : isOpen(c)
+          ? "open"
+          : "closed";
+  const available =
+    h.ready && h.demo && state === "open" && book?.sale_mode === "preorder";
+  if (!book || !c)
+    return (
+      <Empty
+        title="More stories are on the way."
+        text="Check back for the next FIXIHUB preorder."
+        href="/catalog"
+        label="Explore the bookshelf"
+      />
+    );
   return (
-    <div className="page section">
-      <div className="page-intro">
-        <span className="eyebrow">THE NEXT CHAPTER</span>
-        <h1>Good things are on their way.</h1>
-        <p>
-          Reserve your place in the first print run. Campaigns shown here are
-          invented demos.
-        </p>
+    <div className="page section preorder-page">
+      <header className="preorder-heading">
+        <div>
+          <span className="eyebrow">FIXIHUB / UPCOMING EDITIONS</span>
+          <h1>Preorders.</h1>
+        </div>
+        <Link className="text-link" href="/orders">
+          My orders <ArrowUpRight size={16} />
+        </Link>
+      </header>
+      <section className="preorder-feature" aria-labelledby="preorder-title">
+        <Link
+          className="preorder-cover"
+          href={`/books/${book.id}`}
+          aria-label="Explore the KACAU edition"
+        >
+          <BookCover book={book} priority />
+          <span>LIMITED EDITION · NO REPRINT</span>
+        </Link>
+        <div className="preorder-offer">
+          <div className="preorder-status">
+            <span className="eyebrow">FEATURED PREORDER</span>
+            <Status value={state} />
+          </div>
+          <h2 id="preorder-title">
+            KACAU<span>Movie Tie-In</span>
+          </h2>
+          <p className="preorder-author">Ariff Adly · 328 pages</p>
+          <p className="preorder-description">
+            From the page to the big screen. Just 1,000 copies of this edition,
+            with no reprint.
+          </p>
+          <div className="preorder-price">
+            <strong>{money(book.price)}</strong>
+            <span>per copy · postage additional</span>
+          </div>
+          <div className="preorder-actions">
+            <button
+              className="button primary"
+              disabled={!available}
+              onClick={() => h.add(book, c)}
+            >
+              {state === "open"
+                ? "Reserve a copy"
+                : state === "opening_soon"
+                  ? "Opening soon"
+                  : state === "sold_out"
+                    ? "Sold out"
+                    : state === "paused"
+                      ? "Preorders paused"
+                      : "Preorders closed"}
+              <Plus size={17} />
+            </button>
+            <Link className="text-link" href="/cart">
+              View bag <ShoppingBag size={16} />
+            </Link>
+          </div>
+          <Link className="preorder-details-link" href={`/books/${book.id}`}>
+            Synopsis & edition details <ArrowUpRight size={14} />
+          </Link>
+        </div>
+      </section>
+      <div className="preorder-milestones">
+        <div>
+          <BookOpen size={18} />
+          <span>
+            Expected publication<strong>1 November 2026</strong>
+          </span>
+        </div>
+        <div>
+          <Film size={18} />
+          <span>
+            In cinemas<strong>12 November 2026</strong>
+          </span>
+        </div>
+        <div>
+          <ShieldCheck size={18} />
+          <span>
+            Limited print run<strong>1,000 copies · no reprint</strong>
+          </span>
+        </div>
       </div>
-      <div className="campaign-list">
-        {h.data.campaigns
-          .filter((c) => c.active)
-          .map((c) => {
-            const b = h.data.books.find((b) => b.id === c.book_id);
-            if (!b) return null;
-            return (
-              <article className="campaign-card" key={c.id}>
-                <div className="campaign-art">
-                  <BookCover book={b} />
-                </div>
-                <div>
-                  <Status value={isOpen(c) ? "open" : "closed"} />
-                  <h2>{c.title}</h2>
-                  <p>{b.description}</p>
-                  <div className="campaign-stats">
-                    <div>
-                      <span>Closes</span>
-                      <b>{date(c.closes_at)}</b>
-                    </div>
-                    <div>
-                      <span>Estimated release</span>
-                      <b>{date(c.release_at)}</b>
-                    </div>
-                    <div>
-                      <span>Reserved</span>
-                      <b>
-                        {c.reserved} / {c.capacity}
-                      </b>
-                    </div>
-                  </div>
-                  <progress
-                    value={c.reserved}
-                    max={c.capacity}
-                    aria-label="Copies reserved"
-                  />
-                  <div className="campaign-action">
-                    <strong>{money(b.price)}</strong>
-                    <button
-                      className="button primary"
-                      disabled={!isOpen(c) || c.reserved >= c.capacity}
-                      onClick={() => h.add(b, c)}
-                    >
-                      Reserve your copy <ArrowUpRight size={17} />
-                    </button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-      </div>
+      {h.demo && (
+        <div className="preorder-preview">
+          <div>
+            <span className="eyebrow">PREVIEW AVAILABILITY</span>
+            <strong>
+              {Math.max(0, c.capacity - c.reserved).toLocaleString()} /{" "}
+              {c.capacity.toLocaleString()} copies
+            </strong>
+          </div>
+          <progress
+            value={c.reserved}
+            max={c.capacity}
+            aria-label="Preview copies reserved"
+          />
+          <p>
+            Sample window ends {date(c.closes_at)}. Counts and dates are
+            demonstrations, not live sales.
+          </p>
+        </div>
+      )}
+      <section className="preorder-help" aria-labelledby="preorder-help-title">
+        <h2 id="preorder-help-title">Before you preorder</h2>
+        <details>
+          <summary>How does preordering work?</summary>
+          <p>
+            Reserve your copy and enter your delivery details. When payments go
+            live, pay using the merchant QR and upload your receipt. Staff will
+            review it and update your order.
+          </p>
+        </details>
+        <details>
+          <summary>When will my book arrive?</summary>
+          <p>
+            Expected publication is 1 November 2026. This is not a delivery
+            date; dispatch timing will be confirmed separately.
+          </p>
+        </details>
+        <details>
+          <summary>Payment, postage & copy limits</summary>
+          <p>
+            This is a preview. Do not send real money. The two-copy limit, RM8
+            sample postage and five-minute checkout window are provisional.
+            Delivery coverage and final rates will be confirmed before launch.
+          </p>
+        </details>
+      </section>
+      <p className="preorder-browse">
+        Looking for another story?{" "}
+        <Link href="/catalog">
+          Browse the FIXIHUB bookshelf <ArrowUpRight size={14} />
+        </Link>
+      </p>
     </div>
   );
 }
 export function Cart() {
   const h = useHub(),
-    router = useRouter(),
-    [address, setAddress] = useState(""),
+    router = useRouter();
+  const [emailDraft, setEmailDraft] = useState<{
+    account: string;
+    value: string;
+  } | null>(null);
+  const account = h.profile?.id || "guest";
+  const email =
+    emailDraft?.account === account ? emailDraft.value : h.profile?.email || "";
+  const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
     [key] = useState(() => crypto.randomUUID());
   let q: ReturnType<typeof quote> | null = null,
     quoteError = "";
@@ -425,24 +707,42 @@ export function Cart() {
   } catch (e) {
     quoteError = (e as Error).message;
   }
+  if (!h.ready) return <div className="page section">Loading your bagâ€¦</div>;
   if (!h.cart.length)
     return (
-      <div className="page section">
-        <Empty
-          title="Your next chapter is waiting."
-          text="Add a book to your bag and make it yours."
-          href="/catalog"
-          label="Explore the books"
-        />
-      </div>
+      <Empty
+        title="Your copy is waiting."
+        text="Discover the KACAU limited edition and add it to your bag."
+        href={`/books/${KACAU_ID}`}
+        label="Discover KACAU"
+      />
     );
   return (
-    <div className="page section">
+    <div className="page section cart-page">
       <div className="page-intro">
-        <span className="eyebrow">YOUR READING STACK</span>
-        <h1>The bag.</h1>
+        <span className="eyebrow">YOUR LIMITED EDITION</span>
+        <h1>Your preorder.</h1>
+        <p>Copies are held after checkout, not while in your bag.</p>
       </div>
-      <div className="checkout-grid">
+      <form
+        className="checkout-grid compact-checkout"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            if (!navigator.onLine)
+              throw Error("Reconnect before placing an order.");
+            const delivery = deliveryFromForm(e.currentTarget);
+            await h.placeOrder(delivery.address, key, delivery.phone, email);
+            router.push("/orders");
+          } catch (e) {
+            setError((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
         <div>
           {h.cart.map((i) => {
             const b = h.data.books.find((b) => b.id === i.book_id);
@@ -452,17 +752,13 @@ export function Cart() {
                 <div>
                   <h3>{b?.title || "Unavailable book"}</h3>
                   <p>{b?.author}</p>
-                  <Status
-                    value={
-                      i.campaign_id ? "preorder" : b?.format || "unavailable"
-                    }
-                  />
                   <div className="quantity">
                     <button
-                      aria-label={"Decrease quantity of " + b?.title}
+                      type="button"
+                      aria-label="Decrease quantity"
                       onClick={() =>
-                        h.setCart((p) =>
-                          p.map((x) =>
+                        h.setCart((old) =>
+                          old.map((x) =>
                             x.book_id === i.book_id
                               ? { ...x, quantity: Math.max(1, x.quantity - 1) }
                               : x,
@@ -474,18 +770,14 @@ export function Cart() {
                     </button>
                     <span>{i.quantity}</span>
                     <button
-                      aria-label={"Increase quantity of " + b?.title}
+                      type="button"
+                      aria-label="Increase quantity"
+                      disabled={i.quantity >= COPY_LIMIT}
                       onClick={() =>
-                        h.setCart((p) =>
-                          p.map((x) =>
+                        h.setCart((old) =>
+                          old.map((x) =>
                             x.book_id === i.book_id
-                              ? {
-                                  ...x,
-                                  quantity: Math.min(
-                                    b?.format === "ebook" ? 1 : 10,
-                                    x.quantity + 1,
-                                  ),
-                                }
+                              ? { ...x, quantity: x.quantity + 1 }
                               : x,
                           ),
                         )
@@ -498,76 +790,80 @@ export function Cart() {
                 <div className="cart-line-end">
                   <strong>{money((b?.price || 0) * i.quantity)}</strong>
                   <button
-                    className="icon-button"
-                    aria-label={"Remove " + b?.title}
+                    type="button"
+                    aria-label="Remove book"
                     onClick={() =>
-                      h.setCart((p) => p.filter((x) => x.book_id !== i.book_id))
+                      h.setCart((old) =>
+                        old.filter((x) => x.book_id !== i.book_id),
+                      )
                     }
                   >
-                    <Trash2 size={18} />
+                    <Trash2 size={17} />
                   </button>
                 </div>
               </div>
             );
           })}
-          <Link className="text-link" href="/catalog">
-            ← Keep exploring
-          </Link>
+          <p className="fineprint">
+            Expected publication: 1 November 2026. A dispatch date will be
+            confirmed separately.
+          </p>
+          <section
+            className="checkout-details"
+            aria-labelledby="contact-heading"
+          >
+            <h2 id="contact-heading">Contact & delivery</h2>
+            <label>
+              Contact email
+              <input
+                type="email"
+                required
+                maxLength={200}
+                value={email}
+                onChange={(e) =>
+                  setEmailDraft({ account, value: e.target.value })
+                }
+                autoComplete="email"
+              />
+            </label>
+            <DeliveryFields key={account} initial={h.profile?.delivery} />
+          </section>
         </div>
-        <form
-          className="panel checkout-summary"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!navigator.onLine) {
-              setError("Reconnect before placing an order.");
-              return;
-            }
-            setBusy(true);
-            setError("");
-            try {
-              await h.placeOrder(address, key);
-              router.push("/orders");
-            } catch (e) {
-              setError((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
+        <aside
+          className="checkout-summary checkout-receipt"
+          aria-label="Order summary"
         >
-          <h2>A little closer to yours.</h2>
+          <div className="receipt-brand">
+            FIXI<span>HUB</span>
+          </div>
+          <p className="receipt-caption">PREORDER / PREVIEW</p>
+          <h2>Order summary</h2>
           <div className="summary-line">
             <span>Books</span>
             <b>{money(q?.book_total || 0)}</b>
           </div>
           <div className="summary-line">
-            <span>Postage · paid separately</span>
+            <span>Sample postage Â· preview only</span>
             <b>{money(q?.shipping_total || 0)}</b>
           </div>
           <div className="summary-line total">
-            <span>Total</span>
+            <span>Preview total</span>
             <b>{money((q?.book_total || 0) + (q?.shipping_total || 0))}</b>
           </div>
-          {!!q?.shipping_total && (
-            <label>
-              Full delivery address
-              <textarea
-                required
-                minLength={12}
-                maxLength={1000}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Recipient, street, postcode, city, state, Malaysia"
-              />
-            </label>
-          )}
-          <p className="fineprint">
-            {h.demo
-              ? "Demo checkout: no money is collected."
-              : "Place your order, then upload your book and postage receipts. Confirm transfer instructions directly with the project operator."}
+          <p className="receipt-note">
+            Preview only Â· no real payment. Use fictional details.
           </p>
+          <details className="checkout-terms">
+            <summary>Postage & reservation details</summary>
+            <p>
+              RM8 sample postage, the two-copy limit and five-minute checkout
+              window are provisional. Delivery coverage and international rates
+              are not yet confirmed.
+            </p>
+          </details>
           {!h.profile && (
-            <Link href="/account" className="text-link">
-              Sign in to continue →
+            <Link className="button secondary wide" href="/account">
+              Choose a preview account
             </Link>
           )}
           {(error || quoteError) && (
@@ -577,144 +873,340 @@ export function Cart() {
           )}
           <button
             className="button primary wide"
-            disabled={busy || !q || !h.profile}
+            disabled={!h.demo || !h.profile || busy || !q}
           >
-            {busy ? "Placing order…" : "Place order"} <ArrowRight size={18} />
+            {busy ? "Reservingâ€¦" : "Place preview preorder"}
+            <ArrowRight size={17} />
           </button>
-        </form>
+        </aside>
+      </form>
+    </div>
+  );
+}
+export function PaymentInstructions({ order }: { order: Order }) {
+  return (
+    <div className="payment-instructions">
+      <div
+        className="qr-placeholder"
+        aria-label="Payment QR placeholder, not a payment code"
+      >
+        <QrCode size={70} />
+        <span>QR NOT CONFIGURED</span>
+      </div>
+      <div>
+        <span className="eyebrow">PAYMENT PREVIEW</span>
+        <h3>{money(order.book_total + order.shipping_total)} · one transfer</h3>
+        <p>
+          Books {money(order.book_total)} + sample postage{" "}
+          {money(order.shipping_total)}.
+        </p>
+        <p>
+          The approved merchant QR and payee name will appear here before
+          launch. <strong>Do not send real money.</strong>
+        </p>
+        <p className="fineprint">
+          Order reference: {order.id.slice(0, 8).toUpperCase()}. Use a fictional
+          receipt to test the review flow.
+        </p>
       </div>
     </div>
   );
 }
 export function Orders() {
-  const h = useHub(),
-    [upload, setUpload] = useState<{
-      o: Order;
-      kind: "book" | "shipping";
-    } | null>(null),
+  const h = useHub();
+  const [selected, setSelected] = useState<Order | null>(null),
     [file, setFile] = useState<File | null>(null),
-    [error, setError] = useState(""),
+    [reference, setReference] = useState("");
+  const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const orders = h.data.orders.filter((o) => o.customer_id === h.profile?.id);
-  if (!h.ready) return <div className="page section">Loading orders…</div>;
+  const [filter, setFilter] = useState("all");
+  const orders = h.data.orders
+    .filter((o) => o.customer_id === h.profile?.id)
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const closed = ["cancelled", "expired", "refunded"];
+  const visibleOrders = orders.filter(
+    (o) =>
+      filter === "all" ||
+      (filter === "active"
+        ? !closed.includes(o.status)
+        : closed.includes(o.status)),
+  );
+  async function action(id: string, kind: "cancel" | "request_refund") {
+    setBusy(true);
+    try {
+      await h.transition(
+        id,
+        kind,
+        kind === "cancel"
+          ? "Cancelled by customer before payment."
+          : "Customer requested a refund. Please contact customer to resolve.",
+      );
+    } catch (e) {
+      h.notify((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
-    <div className="page section">
+    <div className="page section orders-page">
       <div className="page-intro">
-        <span className="eyebrow">YOUR READING JOURNEY</span>
-        <h1>Every chapter, accounted for.</h1>
-        <p>One order. A clear view of books, payments and postage.</p>
+        <span className="eyebrow">YOUR PREORDERS</span>
+        <h1>My orders.</h1>
+        <p>Track your preorder, from reservation to dispatch.</p>
       </div>
       {!h.profile ? (
         <Empty
-          title="Your orders live here."
-          text="Sign in to view your order history."
+          title="Sign in to view your orders"
+          text="Choose a mock customer to explore the preorder flow."
           href="/account"
-          label="Sign in"
+          label="Choose account"
         />
       ) : !orders.length ? (
         <Empty
-          title="Your first story starts here."
-          text="Orders and payment updates will appear here."
-          href="/catalog"
-          label="Find a book"
+          title="Your first preorder starts here."
+          text="Reserve KACAU and follow its progress in your account."
+          href={`/books/${KACAU_ID}`}
+          label="Discover KACAU"
         />
       ) : (
-        <div className="order-list">
-          {orders.map((o) => (
-            <article className="panel order-card" key={o.id}>
-              <div className="order-top">
-                <div>
-                  <span className="eyebrow">
-                    ORDER / {o.id.slice(0, 8).toUpperCase()}
-                  </span>
-                  <p>{date(o.created_at)}</p>
-                </div>
-                <Status value={o.status} />
-              </div>
-              {o.items.map((i) => (
-                <div className="order-item" key={i.book_id}>
-                  <div>
-                    <h3>{i.title}</h3>
-                    <small>
-                      {i.quantity} × {money(i.unit_price)} · {i.format}
-                      {i.campaign_id ? " · preorder" : ""}
-                    </small>
-                  </div>
-                  <strong>{money(i.unit_price * i.quantity)}</strong>
-                </div>
+        <div className="preorder-orders">
+          <div className="orders-toolbar">
+            <div role="group" aria-label="Filter orders">
+              {["all", "active", "closed"].map((value) => (
+                <button
+                  type="button"
+                  key={value}
+                  aria-pressed={filter === value}
+                  onClick={() => setFilter(value)}
+                >
+                  {value === "all"
+                    ? "All orders"
+                    : value === "active"
+                      ? "In progress"
+                      : "Closed"}
+                </button>
               ))}
-              <div className="payment-grid">
-                {(["book", "shipping"] as const).map((kind) => {
-                  const amount =
-                    kind === "book" ? o.book_total : o.shipping_total;
-                  const latest = h.data.payments
-                    .filter((p) => p.order_id === o.id && p.kind === kind)
-                    .at(-1);
-                  return (
-                    <div className="payment-cell" key={kind}>
-                      <span>
-                        {kind === "book" ? (
-                          <BookOpen size={18} />
-                        ) : (
-                          <Truck size={18} />
-                        )}{" "}
-                        {kind === "book" ? "Book payment" : "Postage payment"}
-                      </span>
-                      <strong>{money(amount)}</strong>
-                      <Status
-                        value={
-                          amount === 0
-                            ? "not_required"
-                            : latest?.status || "awaiting_receipt"
-                        }
-                      />
-                      {latest?.note && <p>{latest.note}</p>}
-                      {amount > 0 &&
-                        (!latest || latest.status === "rejected") && (
-                          <button
-                            className="text-link"
-                            onClick={() => {
-                              setUpload({ o, kind });
-                              setFile(null);
-                              setError("");
-                            }}
-                          >
-                            <Upload size={14} /> Upload receipt
-                          </button>
-                        )}
-                    </div>
-                  );
-                })}
-              </div>
-              {o.tracking_number && (
-                <p className="tracking">
-                  <Truck size={16} /> Tracking: <b>{o.tracking_number}</b>
-                </p>
-              )}
-              <p className="fineprint">
-                {o.address || "Digital order · no delivery address required"}
+            </div>
+            <span role="status">
+              {visibleOrders.length}{" "}
+              {visibleOrders.length === 1 ? "order" : "orders"}
+            </span>
+          </div>
+          {!visibleOrders.length && (
+            <div className="orders-filter-empty">
+              <p>
+                No{" "}
+                {filter === "active" ? "orders in progress" : "closed orders"}.
               </p>
-            </article>
-          ))}
+              <button
+                type="button"
+                className="text-link"
+                onClick={() => setFilter("all")}
+              >
+                Show all orders
+              </button>
+            </div>
+          )}
+          {visibleOrders.map((o) => {
+            const attempts = h.data.payments
+              .filter((p) => p.order_id === o.id)
+              .sort(
+                (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+              );
+            return (
+              <article className="panel order-card" key={o.id}>
+                <div className="order-top">
+                  <div>
+                    <span className="eyebrow">
+                      ORDER / {o.id.slice(0, 8).toUpperCase()}
+                    </span>
+                    <p>{date(o.created_at)}</p>
+                  </div>
+                  <Status value={o.status} />
+                </div>
+                {o.items.map((i) => (
+                  <div className="order-item" key={i.book_id}>
+                    {h.data.books.find((b) => b.id === i.book_id) && (
+                      <Link
+                        href={`/books/${i.book_id}`}
+                        className="order-cover-link"
+                        aria-label={`View ${i.title}`}
+                      >
+                        <BookCover
+                          book={h.data.books.find((b) => b.id === i.book_id)!}
+                          small
+                        />
+                      </Link>
+                    )}
+                    <div>
+                      <h3>{i.title}</h3>
+                      <small>
+                        {i.quantity} × {money(i.unit_price)}
+                      </small>
+                    </div>
+                    <strong>{money(i.quantity * i.unit_price)}</strong>
+                  </div>
+                ))}
+                <div className="summary-line order-total">
+                  <span>
+                    Total <small>including preview postage</small>
+                  </span>
+                  <b>{money(o.book_total + o.shipping_total)}</b>
+                </div>
+                {!closed.includes(o.status) &&
+                  o.status !== "refund_requested" && (
+                    <ol
+                      className="order-progress"
+                      aria-label="Preorder progress"
+                    >
+                      {[
+                        "Reserved",
+                        "Payment review",
+                        "Confirmed",
+                        "Preparing",
+                      ].map((label, index) => {
+                        const step = [
+                          "awaiting_payment",
+                          "payment_review",
+                          "confirmed",
+                          "preparing",
+                        ].indexOf(o.status);
+                        return (
+                          <li
+                            key={label}
+                            data-reached={index <= step}
+                            aria-current={index === step ? "step" : undefined}
+                          >
+                            <span>
+                              {index < step ? <Check size={12} /> : index + 1}
+                            </span>
+                            {label}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                {closed.includes(o.status) && (
+                  <p className="order-message">
+                    {o.status === "expired"
+                      ? "Your unpaid reservation expired. You can reserve again while copies are available."
+                      : o.status === "refunded"
+                        ? "The team has marked your refund as completed."
+                        : "This reservation was cancelled. No further payment is needed."}
+                  </p>
+                )}
+                {o.status === "awaiting_payment" && (
+                  <>
+                    <p className="deadline">
+                      <Clock size={16} /> Upload by {time(o.expires_at!)} MYT
+                    </p>
+                    {attempts[0]?.status === "rejected" && (
+                      <p className="form-error" role="alert">
+                        Receipt needs correction:{" "}
+                        {attempts[0].note || "Please upload a clearer receipt."}
+                      </p>
+                    )}
+                    <PaymentInstructions order={o} />
+                    <button
+                      className="button primary"
+                      onClick={() => {
+                        setSelected(o);
+                        setFile(null);
+                        setReference("");
+                        setError("");
+                      }}
+                    >
+                      <Upload size={16} /> Upload receipt
+                    </button>
+                    <button
+                      className="text-link cancel-order"
+                      disabled={busy}
+                      onClick={() => action(o.id, "cancel")}
+                    >
+                      Cancel unpaid reservation
+                    </button>
+                  </>
+                )}
+                {o.status === "payment_review" && (
+                  <p className="order-message">
+                    <ShieldCheck size={18} /> Your receipt is awaiting review.
+                    Your copies remain reserved.
+                  </p>
+                )}
+                {["confirmed", "preparing"].includes(o.status) && (
+                  <>
+                    <p className="order-message">
+                      <Check size={18} /> Payment approved.{" "}
+                      {o.status === "preparing"
+                        ? "Your order is being prepared."
+                        : "Your preorder is confirmed, awaiting publication."}
+                    </p>
+                    <button
+                      className="text-link"
+                      disabled={busy}
+                      onClick={() => action(o.id, "request_refund")}
+                    >
+                      Request cancellation / refund
+                    </button>
+                  </>
+                )}
+                {o.status === "refund_requested" && (
+                  <p className="order-message">
+                    Your refund request is with the team. This does not mean a
+                    refund has been paid.
+                  </p>
+                )}
+                <details className="order-details">
+                  <summary>Delivery details and payment history</summary>
+                  <p>
+                    {o.customer_name}
+                    <br />
+                    {o.address}
+                    <br />
+                    {o.phone} · {o.email}
+                  </p>
+                  {attempts.map((p) => (
+                    <div className="receipt-history" key={p.id}>
+                      <Status value={p.status} />
+                      <span>
+                        {money(p.amount)} · {p.reference}
+                      </span>
+                      <p>{p.note || "Awaiting staff review"}</p>
+                    </div>
+                  ))}
+                </details>
+                <details className="order-details order-activity">
+                  <summary>Order activity</summary>
+                  <ol className="order-timeline">
+                    {(h.data.events || [])
+                      .filter((e) => e.order_id === o.id)
+                      .map((e) => (
+                        <li key={e.id}>
+                          <span>{time(e.created_at)}</span>
+                          <p>{e.detail}</p>
+                        </li>
+                      ))}
+                  </ol>
+                </details>
+              </article>
+            );
+          })}
         </div>
       )}
-      {upload && (
+      {selected && (
         <Modal
-          title={
-            "Upload " +
-            (upload.kind === "book" ? "book" : "postage") +
-            " receipt"
-          }
-          onClose={() => !busy && setUpload(null)}
+          title="Submit payment evidence"
+          onClose={() => !busy && setSelected(null)}
         >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
               if (!file) return;
               setBusy(true);
+              setError("");
               try {
-                await h.upload(upload.o.id, upload.kind, file);
-                setUpload(null);
+                await h.upload(selected.id, "book", file, reference);
+                setSelected(null);
               } catch (e) {
                 setError((e as Error).message);
               } finally {
@@ -723,31 +1215,32 @@ export function Orders() {
             }}
           >
             <p>
-              Order {upload.o.id.slice(0, 8)} ·{" "}
-              {money(
-                upload.kind === "book"
-                  ? upload.o.book_total
-                  : upload.o.shipping_total,
-              )}
+              One receipt for the total{" "}
+              {money(selected.book_total + selected.shipping_total)}. Use
+              fictional evidence in this preview.
             </p>
+            <label>
+              Transfer reference
+              <input
+                required
+                minLength={3}
+                maxLength={120}
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </label>
             <label className="upload-zone">
               <Upload />
-              <strong>Choose a payment receipt</strong>
-              <span>JPG, PNG or PDF · up to 5 MB</span>
+              <strong>Choose a receipt</strong>
+              <span>JPG, PNG or PDF · maximum 5 MB</span>
               <input
                 aria-label="Receipt file"
                 type="file"
-                accept="image/jpeg,image/png,application/pdf"
                 required
+                accept="image/jpeg,image/png,application/pdf"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
             </label>
-            {h.demo && (
-              <p className="fineprint">
-                Demo files stay on this device. Use a fictional receipt without
-                personal banking details.
-              </p>
-            )}
             {error && (
               <p className="form-error" role="alert">
                 {error}
@@ -762,295 +1255,183 @@ export function Orders() {
     </div>
   );
 }
-export function Library() {
+export function Account() {
   const h = useHub();
+  const [name, setName] = useState("");
   return (
     <div className="page section">
       <div className="page-intro">
-        <span className="eyebrow">YOURS TO KEEP TRACK OF</span>
-        <h1>Your digital bookshelf.</h1>
-        <p>Ebook entitlements appear after book payment is verified.</p>
+        <span className="eyebrow">YOUR ACCOUNT</span>
+        <h1>
+          {h.profile
+            ? `Hello, ${h.profile.display_name.split(" Â· ")[0]}.`
+            : "A place for your preorder."}
+        </h1>
+        <p>
+          {h.demo
+            ? "Choose a preview identity. Each account has its own permissions and order history."
+            : "Customer login will open with website preorders."}
+        </p>
       </div>
-      {!h.data.entitlements.filter((e) => e.customer_id === h.profile?.id)
-        .length ? (
-        <Empty
-          title="Room for a new story."
-          text="This prototype records digital access. It does not distribute copyrighted ebook files."
-          href="/catalog"
-          label="Explore catalog"
-        />
-      ) : (
-        <div className="library-grid">
-          {h.data.entitlements
-            .filter((e) => e.customer_id === h.profile?.id)
-            .map((e) => (
-              <article className="panel" key={e.id}>
-                <BookOpen size={28} />
-                <Status value={e.active ? "active" : "revoked"} />
-                <h2>{e.title}</h2>
-                <p>Granted {date(e.created_at)}</p>
-                <p className="fineprint">
-                  {
-                    h.data.access.filter((a) => a.entitlement_id === e.id)
-                      .length
-                  }{" "}
-                  access checks recorded · no licensed file attached.
-                </p>
-                <button
-                  className="button secondary"
-                  disabled={!e.active}
-                  onClick={() =>
-                    h.access(e.id).catch((e) => h.notify(e.message))
+      <p className="account-legal">
+        Read our <Link href="/terms">Terms of Service</Link> and{" "}
+        <Link href="/privacy">Privacy Policy</Link> for account access and how
+        your information is handled. Preview login is for testing only.
+      </p>
+      {h.demo ? (
+        <>
+          <div className="preview-notice">
+            <ShieldCheck size={20} />
+            <p>
+              Mock login only. These accounts are for testing, not real
+              authentication. Google login is deferred. Preview data and
+              uploaded files stay on this device.
+            </p>
+          </div>
+          <div className="identity-grid">
+            <button
+              className={`identity-card ${!h.profile ? "selected" : ""}`}
+              onClick={() => h.selectIdentity("")}
+            >
+              <span className="eyebrow">GUEST</span>
+              <h3>Browse the website</h3>
+              <p>Discover KACAU and the catalog.</p>
+            </button>
+            {initialData.profiles.map((p) => (
+              <button
+                className={`identity-card ${h.profile?.id === p.id ? "selected" : ""}`}
+                key={p.id}
+                onClick={() => {
+                  try {
+                    h.selectIdentity(p.id);
+                  } catch (e) {
+                    h.notify((e as Error).message);
                   }
-                >
-                  <ShieldCheck size={16} /> Check access
-                </button>
-              </article>
+                }}
+              >
+                <span className="eyebrow">{p.role}</span>
+                <h3>{p.display_name.split(" Â· ")[0]}</h3>
+                <p>
+                  {p.role === "customer"
+                    ? "Reserve copies and submit receipts."
+                    : p.role === "staff"
+                      ? "Review payments and handle orders."
+                      : p.role === "admin"
+                        ? "Manage catalog, campaigns and staff."
+                        : "Manage access and review security history."}
+                </p>
+              </button>
             ))}
+          </div>
+        </>
+      ) : (
+        <div className="panel">
+          <p>Real login and payment collection are not enabled yet.</p>
+        </div>
+      )}
+      {h.profile && (
+        <div className="panel profile-panel">
+          <Status value={h.profile.role} />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              h.updateName(name).catch((e) => h.notify(e.message));
+            }}
+          >
+            <label>
+              Display name
+              <input
+                required
+                maxLength={100}
+                value={name}
+                placeholder={h.profile.display_name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <button className="button secondary">Save name</button>
+          </form>
+          <div className="account-links">
+            <Link href="/orders">
+              My orders <ArrowRight size={16} />
+            </Link>
+            <Link href="/cart">
+              Continue to bag <ArrowRight size={16} />
+            </Link>
+            {can(h.profile, "review") && (
+              <Link href="/admin">
+                Open workspace <ArrowRight size={16} />
+              </Link>
+            )}
+            <Link href="/profile">My profile</Link>
+            <LogoutButton />
+          </div>
         </div>
       )}
     </div>
   );
 }
-export function Account() {
-  const h = useHub(),
-    [signup, setSignup] = useState(false),
-    [email, setEmail] = useState(""),
-    [password, setPassword] = useState(""),
-    [name, setName] = useState(""),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+export function Library() {
   return (
-    <div className="page section account-page">
-      <div className="account-story">
-        <span className="eyebrow">A PLACE FOR YOUR STORIES</span>
-        <h1>
-          One account.
-          <br />
-          Every chapter.
-        </h1>
-        <p>
-          Your books, preorders, receipts and digital library.
-          <br />
-          All connected, all yours.
-        </p>
-        <div className="account-glyph">
-          fh<span>↗</span>
-        </div>
-      </div>
-      <div className="panel account-form">
-        {h.profile ? (
-          <>
-            <span className="eyebrow">MY ACCOUNT</span>
-            <h2>Hello, {h.profile.display_name}.</h2>
-            <Status value={h.profile.role} />
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setBusy(true);
-                try {
-                  await h.updateName(name);
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <label>
-                Display name
-                <input
-                  required
-                  maxLength={100}
-                  value={name}
-                  placeholder={h.profile.display_name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
-              <button disabled={busy} className="button secondary">
-                Save profile
-              </button>
-            </form>
-            <div className="account-links">
-              <Link href="/orders">
-                My orders <ArrowRight size={16} />
-              </Link>
-              <Link href="/library">
-                My library <ArrowRight size={16} />
-              </Link>
-              {h.profile.role === "admin" && (
-                <Link href="/admin">
-                  Publisher workspace <ArrowRight size={16} />
-                </Link>
-              )}
-            </div>
-            <button
-              className="text-link"
-              onClick={() => h.logout().catch((e) => setError(e.message))}
-            >
-              Sign out
-            </button>
-          </>
-        ) : (
-          <>
-            <h2>{signup ? "Start a new chapter." : "Welcome back."}</h2>
-            <p>
-              {h.demo
-                ? "This is a local demo account. No real account is created."
-                : "Sign in to keep every order connected."}
-            </p>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setBusy(true);
-                setError("");
-                try {
-                  await h.auth(email, password, signup ? name : undefined);
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {signup && (
-                <label>
-                  Your name
-                  <input
-                    required
-                    maxLength={100}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    autoComplete="name"
-                  />
-                </label>
-              )}
-              <label>
-                Email address
-                <input
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete={signup ? "new-password" : "current-password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-              <button className="button primary wide" disabled={busy}>
-                {busy ? "Please wait…" : signup ? "Create account" : "Sign in"}{" "}
-                <ArrowRight size={16} />
-              </button>
-            </form>
-            <button className="text-link" onClick={() => setSignup(!signup)}>
-              {signup
-                ? "Already a reader? Sign in"
-                : "New here? Create an account"}
-            </button>
-          </>
-        )}
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        {h.demo && (
-          <div className="source-box">
-            <p>Academic demo · data stays in this browser.</p>
-            <button className="text-link" onClick={h.switchDemo}>
-              Switch demo role
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+    <Empty
+      title="The focus is KACAU."
+      text="Digital purchases are not part of this launch."
+      href="/catalog"
+      label="Explore the books"
+    />
   );
 }
 export function About() {
   return (
     <div className="page section prose">
-      <span className="eyebrow">BEHIND FIXIHUB</span>
+      <span className="eyebrow">PREORDER INFORMATION</span>
       <h1>
-        Real inspiration.
+        A few things
         <br />
-        Clear boundaries.
+        before your next chapter.
       </h1>
+      <h2>What is this edition?</h2>
       <p>
-        FIXIHUB is an independent BIK11003 academic prototype for publisher
-        order and preorder management. It is not an official Buku FIXI service.
+        KACAU: Movie Tie-In by Ariff Adly. RM30 per copy, 328 pages, limited to
+        1,000 copies with no reprint. All preorders are planned through this
+        website.
       </p>
-      <h2>The FIXI identity</h2>
+      <h2>When will it be available?</h2>
       <p>
-        The black-and-white FIXI logo is sourced from{" "}
-        <a
-          href="https://www.mabopa.com.my/ahli/buku-fixi/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          MABOPA’s publisher directory
-        </a>{" "}
-        and shown unchanged. FIXI remains the property of its owner; HUB
-        identifies this independent academic project. The monochrome layout and
-        yellow interface accent are this project’s design interpretation, not
-        official brand guidelines.
+        Expected publication is 1 November 2026. This is not a guaranteed
+        dispatch date. The KACAU movie is scheduled for cinemas on 12 November
+        2026.
       </p>
-      <h2>What is public information?</h2>
+      <h2>How does payment work?</h2>
       <p>
-        Buku Fixi’s name, establishment year (2011), and focus on Malay and
-        English fiction are supported by the{" "}
-        <a
-          href="https://www.mabopa.com.my/ms/ahli/buku-fixi"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Malaysian Book Publishers Association
-        </a>
-        . A small set of titles and author names comes from publicly indexed
-        listings of the{" "}
-        <a
-          href="https://shopee.com.my/bukufixi.os"
-          target="_blank"
-          rel="noreferrer"
-        >
-          official store
-        </a>
-        , observed on 4 October 2026.
+        The planned flow is a merchant QR payment followed by a receipt upload.
+        Staff checks the transfer before confirming the preorder. This preview
+        has no payment destination: please do not transfer money.
       </p>
-      <h2>What is invented?</h2>
+      <h2>What about postage and limits?</h2>
       <p>
-        All prices, stock, genre assignments, descriptions, customer records,
-        shipping rates and campaigns are demonstration data. Kota Selepas Hujan
-        and Catatan Kota are fictional titles. Fallback covers are original
-        geometric placeholders; publisher cover assets, where present, retain
-        their separate provenance.
+        The preview uses RM8 sample postage, a two-copy customer limit and a
+        five-minute checkout reservation. Final shipping coverage, prices,
+        purchase limits and deadlines must be confirmed before live checkout
+        opens.
       </p>
-      <h2>Respecting the source</h2>
+      <h2>Can I cancel?</h2>
       <p>
-        No bulk crawler was run. The logo was retrieved in a single request from
-        MABOPA after checking its robots rules. No access controls were
-        bypassed. No long synopses or ebook files are distributed.
+        In the preview, unpaid orders can be cancelled before evidence is under
+        review. Paid orders can request a refund for admin review. Final
+        cancellation and refund terms will be published before launch.
       </p>
-      <h2>Coursework requirements</h2>
+      <h2>Your details</h2>
       <p>
-        The attached BIK11003 brief calls for a real organization, permission
-        letter, workflow study and a signed/stamped visit appendix. These
-        require your group’s participation. The supplied project documentation
-        maps the implementation to business rules, modules, entities, ERDs, join
-        tables and normalization.
+        Use fictional names, contact details and receipts while testing. Preview
+        records stay in this browser. The production privacy notice, retention
+        policy and official support contact are pending.
       </p>
+      <h2>Other books and artwork</h2>
       <p>
-        The formal report is limited to 20 pages, with a 30-minute presentation
-        in Week 13 and submission in Week 13/14. Consult the original brief for
-        your group’s deadlines.
+        Other real catalog titles remain available to browse, with purchasing
+        disabled. Existing book artwork belongs to its respective owners. The
+        KACAU jacket shown on this website is the supplied movie tie-in cover.
+        Further film information will be added when available.
       </p>
     </div>
   );

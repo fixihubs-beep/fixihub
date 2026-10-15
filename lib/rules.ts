@@ -1,4 +1,5 @@
 import type { Book, Campaign, CartItem, Order, Payment } from "./types";
+import { KACAU_ID, COPY_LIMIT, CAPACITY } from "./preorder";
 export const money = (n: number) =>
   new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(
     n,
@@ -24,15 +25,27 @@ export function quote(
     seen.add(i.book_id);
     const b = books.find((b) => b.id === i.book_id && b.active);
     if (!b) throw Error("Book unavailable.");
-    if (!Number.isInteger(i.quantity) || i.quantity < 1 || i.quantity > 10)
-      throw Error("Choose 1–10 copies.");
+    if (b.id !== KACAU_ID || b.sale_mode !== "preorder")
+      throw Error("This book is currently unavailable for purchase.");
+    if (!i.campaign_id)
+      throw Error("Choose the active KACAU preorder campaign.");
+    if (
+      !Number.isInteger(i.quantity) ||
+      i.quantity < 1 ||
+      i.quantity > COPY_LIMIT
+    )
+      throw Error("Choose 1–2 copies of this limited edition.");
     if (b.format === "ebook" && i.quantity !== 1)
       throw Error("Choose one digital entitlement per order.");
     if (i.campaign_id) {
       const c = campaigns.find(
         (c) => c.id === i.campaign_id && c.book_id === b.id,
       );
-      if (!c || !isOpen(c, now) || c.reserved + i.quantity > c.capacity)
+      if (
+        !c ||
+        !isOpen(c, now) ||
+        c.reserved + i.quantity > Math.min(c.capacity, CAPACITY)
+      )
         throw Error("Preorder unavailable.");
     } else if (b.format === "physical" && b.stock < i.quantity)
       throw Error("Not enough stock.");
@@ -40,6 +53,7 @@ export function quote(
     physical ||= b.format === "physical";
     return { ...i, title: b.title, format: b.format, unit_price: b.price };
   });
+  // Preview-only postage, explicitly identified in checkout. Live checkout stays disabled.
   return { items, book_total: total, shipping_total: physical ? 8 : 0 };
 }
 export function balance(o: Order, p: Payment[], kind: "book" | "shipping") {

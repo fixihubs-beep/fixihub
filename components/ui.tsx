@@ -7,26 +7,33 @@ import { money } from "@/lib/rules";
 import { BookCover } from "./book-cover";
 export function BookCard({ book }: { book: Book }) {
   return (
-    <Link href={"/books/" + book.id} className="book-card">
-      <div className="book-stage">
+    <article className="book-card">
+      <Link
+        className="book-stage"
+        href={"/books/" + book.id}
+        aria-label={`Explore ${book.title}`}
+      >
         <BookCover book={book} />
-        <span className="card-arrow">
-          <ArrowUpRight size={20} />
-        </span>
         {book.format === "ebook" && <span className="format-badge">EBOOK</span>}
-      </div>
-      <div className="book-info">
+      </Link>
+      <Link href={"/books/" + book.id} className="book-info">
         <span className="eyebrow">{book.category}</span>
-        <h3>{book.title}</h3>
+        <h3>
+          {book.title} <ArrowUpRight size={14} />
+        </h3>
         <p>{book.author}</p>
         <div className="book-bottom">
-          <strong>{money(book.price)}</strong>
+          <strong>
+            {book.sale_mode === "preorder" ? money(book.price) : "Browse title"}
+          </strong>
           <span>
-            {book.provenance === "demo" ? "Demo title" : "Public metadata"}
+            {book.sale_mode === "preorder"
+              ? "Limited edition preorder"
+              : "Unavailable for purchase"}
           </span>
         </div>
-      </div>
-    </Link>
+      </Link>
+    </article>
   );
 }
 export function Modal({

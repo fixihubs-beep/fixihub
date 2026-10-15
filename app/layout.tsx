@@ -1,17 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import { Provider } from "@/components/provider";
 import { Shell } from "@/components/shell";
+import { QueueProvider } from "@/components/queue";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: {
-    default: "FIXIHUB — Stories, without limits.",
-    template: "%s · FIXIHUB",
-  },
+  title: "fixihub",
   description:
-    "An independent academic publisher order and preorder management prototype.",
+    "Explore Malaysian stories at FIXIHUB. Featured preorder: KACAU: Movie Tie-In by Ariff Adly, RM30 and limited to 1,000 copies. Browse the bookshelf and discover your next read.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/favicon.svg", apple: "/icons/icon-192.png" },
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "FIXIHUB" },
+  icons: { icon: "/icons/fixi-32.png", apple: "/icons/fixi-180.png" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "fixihub" },
 };
 export const viewport: Viewport = {
   width: "device-width",
@@ -27,7 +25,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         <Provider>
-          <Shell>{children}</Shell>
+          <QueueProvider>
+            <Shell>{children}</Shell>
+          </QueueProvider>
         </Provider>
       </body>
     </html>

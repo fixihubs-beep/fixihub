@@ -1,118 +1,52 @@
-# FIXIHUB
+# FIXIHUB — KACAU website preorder preview
 
-A working academic publisher order/preorder application built with **Next.js 16 App Router, TypeScript, React 19, Supabase Auth/Postgres/Storage, React Three Fiber / Three.js, and PWA support**.
+KACAU: Movie Tie-In is the featured release: Ariff Adly, RM30, 328 pages, 1,000 copies, no reprint. Expected publication is 1 November 2026; cinema release is 12 November 2026. All planned preorders are through this website. Other real titles are browsing-only.
 
-**Not an official Buku FIXI service.** Public title/author facts are credited; all commercial values, campaigns, covers and operational assumptions are demo data. No copyrighted ebooks are distributed.
+## Run locally
 
-## Run immediately
-
-Requires Node.js 22+ and npm.
+Requires Node.js 22+.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. With no Supabase environment values, the app runs in **device-local demo mode**. The storefront, cart, checkout, receipt upload, admin review, shipping, catalog editing, campaign editing, reporting and ebook access records all work. Orders/catalog changes persist in localStorage; demo receipt blobs use IndexedDB; the bag uses sessionStorage. Use fictional receipts only. Demo data is not shared between browsers/devices.
+Open http://127.0.0.1:3000. Development defaults to mock mode. At `/account`, select Aina or Daniel (customers), Sarah (staff), Amir (admin), Hana (superadmin), or guest. Each identity has separate permissions and order visibility. Google OAuth and tracking are intentionally deferred.
 
-Use the footer **Switch to demo admin**, then **Publisher workspace**. Switch back to demo reader to view the customer experience. This role switch exists only when Supabase is unconfigured. Connected users cannot change roles themselves.
+To build a **preview** for a production-style server, explicitly set `NEXT_PUBLIC_APP_MODE=mock` before building (see `.env.example`). A production build without this flag, or with `NEXT_PUBLIC_APP_MODE=live`, shows the catalog with checkout/login disabled. Environment changes require rebuilding. This is a fail-closed launch gate, not a completed live adapter.
 
-## Connect Supabase
+## Test the journey
 
-1. Create a Supabase project, or run the Supabase CLI local stack with Docker: `supabase start`.
-2. Apply `supabase/migrations/001_fixihub.sql`, then `supabase/seed.sql` in the SQL editor. For the local stack use `supabase db reset`. For a linked project use `supabase db push` for migrations and run the seed separately. Never reset a production database.
-3. Copy `.env.example` to `.env.local`. Set `NEXT_PUBLIC_SUPABASE_URL` and the public anon/publishable key in `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Never put a service-role key in a NEXT_PUBLIC variable.
-4. In Supabase Auth, configure Site URL and allowed redirects for the actual origin. Enable email/password and email confirmation; configure an SMTP provider for reliable confirmation delivery.
-5. Restart Next.js. Register a user at `/account` and confirm their email.
-6. After verifying the account ID, the database owner can promote the intended administrator in the Supabase SQL editor:
+1. Choose Aina at `/account`, open KACAU, add one copy, and checkout using fictional contact/address details.
+2. On `/orders`, view the unconfigured payment QR panel and upload a fictional JPG/PNG/PDF with a made-up transfer reference. Do not send money or upload real banking evidence.
+3. Choose Sarah, open `/admin`, then Payment review. Load the private preview receipt, acknowledge the simulated bank check, and approve with a note. Rejection requires a reason and allows a new submission.
+4. Return to Aina to see the confirmed preorder and timeline. Daniel cannot see Aina's orders.
+5. Amir can manage catalog, campaign schedule/pause, reports, customer/staff access and refund cases. Hana additionally manages elevated roles and security audit.
 
-```sql
-update public.profiles set role = 'admin' where id = 'ACTUAL_AUTH_USER_UUID';
-```
+The preview uses a provisional two-copy limit across active customer orders, 24-hour unpaid holds/correction windows, 15–31 October campaign dates and RM8 sample postage. One receipt covers book plus sample postage. These are not approved commercial terms.
 
-7. Register a second reader and verify the permissions using the acceptance checklist. No default admin password or seeded auth accounts exist.
+## What is implemented
 
-The migration creates a **private** receipts bucket (JPG/PNG/PDF, maximum 5 MB), ownership policies and transactional RPCs. Clients read through RLS and mutate via authorized database functions. A broken configured connection shows an error; it does not silently switch to demo mode.
+KACAU homepage/movie countdown, catalog-only restrictions, guest and four authenticated mock roles, checkout, one combined receipt, payment review/rejection/resubmission, customer order timeline, copy-limit/expiry/cancellation rules, mock refund handling, campaign management, catalog content editing, reporting, role controls and audit views. The supplied KACAU jacket, front/back controls and motion-accessible cinematic design are integrated. Film credits are verified from the public Instagram biography (see docs/KACAU-ASSETS.md). The merchant QR remains pending.
 
-## Demo walkthrough (5–8 minutes)
+## Important boundaries
 
-1. Browse `/catalog`; search by author and open a 3D product view.
-2. Add JELIK and the invented ebook CATATAN KOTA. Checkout requires a delivery address and shows RM8 demo postage separately.
-3. At `/orders`, upload a fictional receipt for books and a separate receipt for postage.
-4. Switch to demo admin; load each receipt in Payment review, inspect it, then verify. Rejecting requires a reason; the reader can resubmit.
-5. In Orders, add a tracking number. Shipping is blocked until both payments are verified. Confirm delivery afterward.
-6. Return to the reader library: ebook entitlement exists after book payment, even before physical shipping. **Check access** records an access event; there is deliberately no ebook download file.
-7. Use publisher Catalog to add/edit/archive books, Preorders to create/update campaigns, and Reports to export CSV.
-8. Add a preorder to verify capacity reservation and release-date fulfillment restrictions. The seeded campaign is explicitly fictional.
+- Mock records use localStorage, receipts use IndexedDB, identity/cart use sessionStorage. This is a single-browser-tab preview, not a shared or secure production database. UI permissions simulate the intended access model; browser storage is inspectable by the device owner.
+- The new provider **does not connect to Supabase**. Existing `lib/supabase.ts`, migration 001, seed and coursework documents are legacy foundations. They use two roles and separate book/postage payments and are not compatible with this new flow. Do not deploy them as the KACAU production backend.
+- Mock balances, reviews and refund actions do not move funds. Merchant payment setup, real authentication, final postage/policies and the new Supabase migrations/RLS are still required.
+- Google OAuth is the last integration and will only be implemented on instruction. Tracking/courier actions remain deferred.
+- No live service has been deployed by this implementation.
 
-## Implemented surfaces
+See [the revised production plan](docs/PRODUCTION-PREORDER-PLAN.md) for the full role matrix, implementation status, Supabase/RLS design and remaining launch gates.
 
-| Route       | Purpose                                                         |
-| ----------- | --------------------------------------------------------------- |
-| /           | Editorial storefront and interactive 3D hero                    |
-| /catalog    | Search, genre filtering, sorting                                |
-| /books/[id] | Book metadata, source attribution, 3D product viewer            |
-| /preorders  | Campaign window, capacity, release dates, reserve action        |
-| /cart       | Quantities, removal, address, authoritative checkout            |
-| /account    | Supabase signup/sign-in, profile, sign-out                      |
-| /orders     | Order history/status, separate receipt uploads and review notes |
-| /library    | Ebook entitlement and access-check history                      |
-| /admin      | Orders, payment review, catalog, campaigns, customers, reports  |
-| /about      | Public/demo provenance and academic disclosure                  |
-
-Admin sections use local tabs within `/admin`. Auth and RLS protect data even if someone navigates directly to the URL.
-
-## Checks
+## Verification
 
 ```sh
 npm run typecheck
 npm test
-npm run test:db
 npm run build
-npm run start
-# With the production server running on 127.0.0.1:3000:
+# With npm run dev running on port 3000:
 npm run test:e2e
 ```
 
-Browser tests use installed Chrome (`channel: 'chrome'`). Install Chrome or change Playwright to an installed browser. `PLAYWRIGHT_BASE_URL` can override the test target. Database tests use real PostgreSQL in PGlite with **mock Supabase auth/storage schemas**, exercising the migration, seed, RLS and transaction functions. They are not a substitute for the hosted Storage/Auth acceptance checks.
-
-## Deploy
-
-See [deployment instructions](docs/DEPLOYMENT.md). Build with `npm run build`, deploy to a standard Next.js Node host or Vercel, and set the two public Supabase variables **before building**. Rebuild after changing them. This project uses real Next.js, not a substitute framework.
-
-The PWA needs HTTPS except on localhost. Browser install is offered when supported. On iOS use Share → Add to Home Screen. Offline mode serves a dedicated offline page; authenticated pages, customer data, receipts and API responses are never cached by the service worker.
-
-## Coursework documents
-
-- [Original BIK11003 brief](docs/reference/projectinstructionbik11003semi2627.pdf)
-- [Requirement traceability](docs/REQUIREMENTS.md)
-- [Business operations and rules](docs/BUSINESS-RULES.md)
-- [Transaction modules](docs/TRANSACTIONS.md)
-- [Schema/data dictionary and complete ERD](docs/SCHEMA.md)
-- [Module ERD segments](docs/ERD-SEGMENTS.md)
-- [Normalization analysis](docs/NORMALIZATION.md)
-- [Public research and provenance](docs/RESEARCH.md)
-- [Report draft with all eight required sections](docs/REPORT-DRAFT.md)
-- [Deployment and security](docs/DEPLOYMENT.md)
-- [Verification and acceptance checklist](docs/TESTING.md)
-
-## Scope boundaries
-
-- The organization’s actual internal workflow has **not** been observed. The student group must obtain permission, meet the organization, validate assumptions and obtain its signature/stamp. No evidence is invented.
-- A formal `groupno_projectDB.docx` must be prepared in the prescribed format and kept within 20 pages. The report draft is source material, not a falsely completed submission.
-- No Supabase credentials were supplied during implementation. Hosted Auth/email/Storage integration and production deployment require the project operator’s setup. Local database and browser tests validate the supplied implementation.
-- No payment gateway or bank integration. Verification is a human action after inspecting bank records; a receipt alone is not proof.
-- Flat demo postage is RM8 for an order with any physical books; real zone rates/taxes/refunds/cancellation are outside this requested prototype.
-- Unpaid orders reserve stock/capacity until manually reconciled by an operator. There is no automatic expiration/cancellation/restock job.
-- No copyrighted file storage/download. Entitlements and access records are implemented; adding licensed assets later requires an authorization check and short-lived signed links.
-- Demo mode is for one browser and does not provide cross-tab/concurrent transaction guarantees. PostgreSQL functions are the authoritative implementation for multiple users.
-
-Code structure: `components/provider.tsx` exposes the connected/demo data adapter; `lib/rules.ts` provides UI validation; database functions independently enforce all important business rules. SQL is the source of truth for live transactions.
-
-## Refined FIXI identity
-
-The app uses the public FIXI logo with a separate HUB label, monochrome editorial styling and yellow action accents. See [branding provenance](docs/BRANDING.md).
-
-### Published book covers
-
-Six real catalog titles use matching published covers, with source and integrity records in `lib/cover-sources.json`. See [cover provenance and access review](docs/COVERS.md). Run `node scripts/verify-covers.mjs` to verify the bundled files. The two invented titles retain demo artwork.
+Browser tests use Chrome and a fixed 15 October 2026 date to exercise the preview campaign consistently. Screenshots go to `docs/screenshots/kacau-*.png`. The historical `npm run test:db` suite tests only legacy migration 001; it does not validate the new preorder model. The service worker retains its offline shell and does not cache authenticated pages or payment data.

@@ -1,73 +1,136 @@
 "use client";
-import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  BarChart3,
-  BookOpen,
   Check,
-  ChevronRight,
   Download,
-  LayoutDashboard,
-  Package,
-  Plus,
-  Search,
-  Settings2,
+  Pause,
+  Play,
   ShieldCheck,
-  Truck,
-  Users,
-  Wallet,
   X,
-  Clock,
+  LayoutDashboard,
+  ShoppingBag,
+  Receipt,
+  BookOpen,
+  CalendarDays,
+  Users,
+  BarChart3,
+  History,
+  LockKeyhole,
   ArrowUpRight,
 } from "lucide-react";
 import { useHub } from "./provider";
 import { Empty, Modal, Status } from "./ui";
 import { BookCover } from "./book-cover";
-import { balance, csvCell, money } from "@/lib/rules";
-import type { Book, Campaign, Order, Payment } from "@/lib/types";
-const tabs = [
-  ["overview", "Overview", LayoutDashboard],
-  ["orders", "Orders", Package],
-  ["payments", "Payment review", Wallet],
-  ["catalog", "Catalog", BookOpen],
-  ["campaigns", "Preorders", Clock],
-  ["customers", "Customers", Users],
-  ["reports", "Reports", BarChart3],
-] as const;
+import { money, csvCell } from "@/lib/rules";
+import { can, CAPACITY, holdsInventory, KACAU_ID } from "@/lib/preorder";
+import type { Book, Campaign, Order, Payment, Profile } from "@/lib/types";
+function localInput(value: string) {
+  return new Date(Date.parse(value) + 8 * 3600000).toISOString().slice(0, 16);
+}
+const descriptions: Record<string, string> = {
+  overview: "The limited edition, at a glance.",
+  orders: "Every reservation and its next step.",
+  payments: "Match evidence to bank records before approving.",
+  catalog: "Keep the bookshelf accurate.",
+  campaigns: "Control the website preorder window.",
+  people: "Manage access without sharing identities.",
+  reports: "Separate reservations from verified payments.",
+  audit: "A record of operational changes.",
+  security: "Access governance and launch readiness.",
+};
+const tabLabels: Record<string, string> = {
+  overview: "Overview",
+  orders: "Orders",
+  payments: "Payment review",
+  catalog: "Catalog",
+  campaigns: "Campaigns",
+  people: "Team & customers",
+  reports: "Reports",
+  audit: "Audit",
+  security: "Security",
+};
+const tabIcons = {
+  overview: LayoutDashboard,
+  orders: ShoppingBag,
+  payments: Receipt,
+  catalog: BookOpen,
+  campaigns: CalendarDays,
+  people: Users,
+  reports: BarChart3,
+  audit: History,
+  security: LockKeyhole,
+};
 export function Admin() {
-  const h = useHub(),
-    [tab, setTab] = useState("overview"),
-    [search, setSearch] = useState(""),
-    [book, setBook] = useState<Book | null>(null),
-    [campaign, setCampaign] = useState<Campaign | null>(null),
-    [payment, setPayment] = useState<Payment | null>(null),
+  const h = useHub();
+  const [tab, setTab] = useState("overview"),
+    [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [accessChange, setAccessChange] = useState<{
+    profile: Profile;
+    role: Profile["role"];
+    active: boolean;
+  } | null>(null);
+  const [payment, setPayment] = useState<Payment | null>(null),
     [order, setOrder] = useState<Order | null>(null),
-    [note, setNote] = useState(""),
-    [tracking, setTracking] = useState(""),
-    [error, setError] = useState(""),
+    [book, setBook] = useState<Book | null>(null),
+    [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [note, setNote] = useState(""),
+    [receiptUrl, setReceiptUrl] = useState(""),
+    [checked, setChecked] = useState(false),
     [busy, setBusy] = useState(false),
-    [receiptUrl, setReceiptUrl] = useState("");
-  const pending = h.data.payments.filter((p) => p.status === "pending"),
-    collected = h.data.payments
-      .filter((p) => p.status === "verified")
-      .reduce((s, p) => s + p.amount, 0),
-    due = h.data.orders.reduce(
-      (s, o) =>
-        s +
-        balance(o, h.data.payments, "book") +
-        balance(o, h.data.payments, "shipping"),
-      0,
-    );
-  const selectedOrders = h.data.orders.filter((o) =>
-    (o.id + " " + o.customer_name + " " + o.status)
-      .toLowerCase()
-      .includes(search.toLowerCase()),
+    [error, setError] = useState("");
+  useEffect(
+    () => () => {
+      if (receiptUrl.startsWith("blob:")) URL.revokeObjectURL(receiptUrl);
+    },
+    [receiptUrl],
   );
-  async function act(f: () => Promise<void>, close?: () => void) {
-    setBusy(true);
+  useEffect(() => {
+    setTab("overview");
+    setSearch("");
+    setStatusFilter("all");
+    setAccessChange(null);
+    setPayment(null);
+    setOrder(null);
+    setBook(null);
+    setCampaign(null);
+    setReceiptUrl("");
     setError("");
+  }, [h.profile?.id, h.profile?.role]);
+  if (!h.ready) return <div className="page section">Loading workspace…</div>;
+  if (!can(h.profile, "review"))
+    return (
+      <Empty
+        title="The publisher workspace"
+        text="Staff, admin and superadmin accounts have access. Choose a preview identity to test permissions."
+        href="/account"
+        label="Choose account"
+      />
+    );
+  const manager = can(h.profile, "catalog"),
+    security = can(h.profile, "security");
+  const tabs = [
+    "overview",
+    "orders",
+    "payments",
+    ...(manager ? ["catalog", "campaigns", "people", "reports", "audit"] : []),
+    ...(security ? ["security"] : []),
+  ];
+  const pending = h.data.payments.filter((p) => p.status === "pending");
+  const collected = h.data.payments
+    .filter((p) => p.status === "verified")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const refunded = h.data.orders
+    .filter((o) => o.status === "refunded")
+    .reduce((sum, o) => sum + o.book_total + o.shipping_total, 0);
+  const c = h.data.campaigns.find((campaign) => campaign.book_id === KACAU_ID);
+  const matches = (value: string) =>
+    value.toLowerCase().includes(search.trim().toLowerCase());
+  async function act(fn: () => Promise<void>, close?: () => void) {
+    setError("");
+    setBusy(true);
     try {
-      await f();
+      await fn();
       close?.();
     } catch (e) {
       setError((e as Error).message);
@@ -76,248 +139,233 @@ export function Admin() {
     }
   }
   function exportReport() {
+    if (!can(h.profile, "reports")) return;
     const rows = [
       [
-        "Order ID",
+        "Order",
         "Customer",
-        "Created",
         "Status",
-        "Book total MYR",
+        "Copies",
+        "Books MYR",
         "Postage MYR",
-        "Verified MYR",
-        "Balance MYR",
+        "Approved MYR",
+        "Refunded MYR",
       ],
       ...h.data.orders.map((o) => [
         o.id,
         o.customer_name,
-        o.created_at,
         o.status,
+        o.items.reduce((n, i) => n + i.quantity, 0),
         o.book_total,
         o.shipping_total,
         h.data.payments
           .filter((p) => p.order_id === o.id && p.status === "verified")
-          .reduce((s, p) => s + p.amount, 0),
-        balance(o, h.data.payments, "book") +
-          balance(o, h.data.payments, "shipping"),
+          .reduce((n, p) => n + p.amount, 0),
+        o.status === "refunded" ? o.book_total + o.shipping_total : 0,
       ]),
     ];
-    const blob = new Blob(
-      ["\uFEFF" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n")],
-      { type: "text/csv;charset=utf-8" },
+    const url = URL.createObjectURL(
+      new Blob(
+        ["\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n")],
+        { type: "text/csv;charset=utf-8" },
+      ),
     );
-    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "fixihub-order-report.csv";
+    a.download = "kacau-preview-orders.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
-  if (!h.ready)
-    return <div className="page section">Loading publisher workspace…</div>;
-  if (h.profile?.role !== "admin")
-    return (
-      <div className="page section">
-        <Empty
-          title="The publisher workspace."
-          text={
-            h.demo
-              ? "Switch to the demo administrator to explore catalog management, receipt verification and reporting."
-              : "Sign in with an administrator account to continue."
-          }
-          href="/account"
-          label="Go to account"
-        />
-        {h.demo && (
-          <div className="center">
-            <button className="button primary" onClick={h.switchDemo}>
-              Enter demo publisher workspace <ArrowUpRight size={16} />
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  const openPayment = (p: Payment) => {
-    if (receiptUrl.startsWith("blob:")) URL.revokeObjectURL(receiptUrl);
-    setPayment(p);
-    setReceiptUrl("");
+  function openOrder(o: Order) {
+    setOrder(o);
     setNote("");
     setError("");
-  };
-  function orderTable(list: Order[]) {
-    return list.length ? (
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Order / reader</th>
-              <th>Books</th>
-              <th>Amount</th>
-              <th>Postage</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((o) => (
-              <tr key={o.id}>
-                <td>
-                  <b>#{o.id.slice(0, 8).toUpperCase()}</b>
-                  <small>{o.customer_name}</small>
-                </td>
-                <td>{o.items.reduce((s, i) => s + i.quantity, 0)} copies</td>
-                <td>{money(o.book_total)}</td>
-                <td>
-                  <Status
-                    value={
-                      balance(o, h.data.payments, "shipping")
-                        ? "unpaid"
-                        : "settled"
-                    }
-                  />
-                </td>
-                <td>
-                  <Status value={o.status} />
-                </td>
-                <td>
-                  <button
-                    className="icon-button"
-                    aria-label={"Manage order " + o.id.slice(0, 8)}
-                    onClick={() => {
-                      setOrder(o);
-                      setTracking(o.tracking_number || "");
-                      setError("");
-                    }}
-                  >
-                    <ChevronRight size={17} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    ) : (
-      <Empty
-        title="No orders yet."
-        text="Place a demo order in the storefront to start the complete workflow."
-        href="/catalog"
-        label="Open storefront"
-      />
-    );
   }
+  function openPayment(p: Payment) {
+    setPayment(p);
+    setNote("");
+    setReceiptUrl("");
+    setChecked(false);
+    setError("");
+  }
+  const filtered = h.data.orders
+    .filter(
+      (o) =>
+        matches(`${o.id} ${o.customer_name} ${o.status}`) &&
+        (statusFilter === "all" || o.status === statusFilter),
+    )
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const paymentRows = h.data.payments.filter(
+    (p) =>
+      matches(
+        `${p.order_id} ${p.reference} ${h.data.orders.find((o) => o.id === p.order_id)?.customer_name || ""}`,
+      ) &&
+      (statusFilter === "all" || p.status === statusFilter),
+  );
+  const catalogRows = h.data.books.filter(
+    (b) => b.provenance !== "demo" && matches(`${b.title} ${b.author}`),
+  );
+  const peopleRows = h.data.profiles.filter((p) =>
+    matches(`${p.display_name} ${p.role} ${p.email || ""}`),
+  );
+  const auditRows = [...(h.data.events || [])]
+    .reverse()
+    .filter((e) => matches(`${e.action} ${e.detail} ${e.actor_id}`));
+  function navigate(next: string) {
+    setTab(next);
+    setSearch("");
+    setStatusFilter("all");
+    setError("");
+  }
+
+  const table = (orders: Order[]) => (
+    <div className="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Order / customer</th>
+            <th>Copies</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o) => (
+            <tr key={o.id}>
+              <td data-label="Order / customer">
+                <b>#{o.id.slice(0, 8).toUpperCase()}</b>
+                <small>{o.customer_name}</small>
+              </td>
+              <td data-label="Copies">
+                {o.items.reduce((n, i) => n + i.quantity, 0)}
+              </td>
+              <td data-label="Total">
+                {money(o.book_total + o.shipping_total)}
+              </td>
+              <td data-label="Status">
+                <Status value={o.status} />
+              </td>
+              <td data-label="Action">
+                <button className="text-link" onClick={() => openOrder(o)}>
+                  Manage order
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!orders.length && (
+        <p className="workspace-empty">
+          No matching orders. New reservations will appear here.
+        </p>
+      )}
+    </div>
+  );
   return (
     <div className="admin-layout">
       <aside className="admin-sidebar">
         <span className="eyebrow">PUBLISHER WORKSPACE</span>
         <div className="workspace-name">
-          <span className="workspace-icon">
-            <img
-              src="/brand/buku-fixi-logo.jpg"
-              alt="FIXI"
-              width={34}
-              height={34}
-            />
-          </span>
+          <ShieldCheck />
           <div>
             <b>FIXIHUB</b>
-            <small>
-              {h.demo ? "Demonstration workspace" : "Publisher administration"}
-            </small>
+            <small>{h.profile?.role} · preview</small>
           </div>
         </div>
-        <nav aria-label="Publisher navigation">
-          {tabs.map(([id, label, Icon]) => (
+        <nav aria-label="Workspace navigation">
+          {tabs.map((t) => (
             <button
-              className={tab === id ? "selected" : ""}
-              key={id}
-              onClick={() => {
-                setTab(id);
-                setSearch("");
-                setError("");
-              }}
+              key={t}
+              className={tab === t ? "selected" : ""}
+              aria-current={tab === t ? "page" : undefined}
+              onClick={() => navigate(t)}
             >
-              <Icon size={18} />
-              {label}
-              {id === "payments" && pending.length > 0 && (
+              {(() => {
+                const Icon = tabIcons[t as keyof typeof tabIcons];
+                return <Icon size={17} aria-hidden="true" />;
+              })()}
+              <span>{tabLabels[t]}</span>
+              {t === "payments" && pending.length > 0 && (
                 <span className="count">{pending.length}</span>
               )}
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="dot" /> All records connected
-          <p>Books. Readers. The whole story.</p>
-          <Link href="/">Back to storefront ↗</Link>
+          <p>
+            Website preorders only.
+            <br />
+            1,000 copies. No reprint.
+          </p>
+          <a href="/account">Switch preview identity ↗</a>
         </div>
       </aside>
       <section className="admin-content">
         <div className="admin-heading">
           <div>
-            <span className="eyebrow">YOUR PUBLISHING DESK</span>
-            <h1>
-              {tab === "overview"
-                ? "A clearer picture."
-                : tabs.find((t) => t[0] === tab)?.[1]}
-            </h1>
-            <p>
-              {tab === "overview"
-                ? "Every order is a story in progress. Here’s where things stand."
-                : "Manage the details. Keep the next chapter moving."}
-            </p>
+            <span className="eyebrow">{h.profile?.display_name}</span>
+            <h1>{tabLabels[tab]}</h1>
+            <p>{descriptions[tab]}</p>
           </div>
-          {tab === "catalog" ? (
-            <button
-              className="button primary"
-              onClick={() => {
-                setError("");
-                setBook({
-                  id: crypto.randomUUID(),
-                  title: "",
-                  slug: "",
-                  author: "",
-                  category: "Fiction",
-                  price: 25,
-                  stock: 10,
-                  color: "#b9d559",
-                  description: "",
-                  format: "physical",
-                  source_url: null,
-                  provenance: "demo",
-                  active: true,
-                });
-              }}
-            >
-              <Plus size={17} /> Add book
-            </button>
-          ) : tab === "campaigns" ? (
-            <button
-              className="button primary"
-              onClick={() => {
-                setError("");
-                setCampaign({
-                  id: crypto.randomUUID(),
-                  book_id: h.data.books[0]?.id || "",
-                  title: "",
-                  opens_at: new Date().toISOString(),
-                  closes_at: new Date(Date.now() + 30 * 86400000).toISOString(),
-                  release_at: new Date(
-                    Date.now() + 60 * 86400000,
-                  ).toISOString(),
-                  capacity: 100,
-                  reserved: 0,
-                  active: true,
-                });
-              }}
-            >
-              <Plus size={17} /> New campaign
-            </button>
-          ) : (
+          {tab === "reports" && can(h.profile, "reports") && (
             <button className="button secondary" onClick={exportReport}>
-              <Download size={16} /> Export report
+              <Download size={16} /> Export orders
             </button>
           )}
         </div>
-        {error && !book && !campaign && !payment && !order && (
+        <div className="workspace-mode">
+          <span className="workspace-dot" />
+          Preview workspace <span>Device-local records · no real payments</span>
+        </div>
+        {["orders", "payments", "catalog", "people", "audit"].includes(tab) && (
+          <div className="workspace-toolbar">
+            <label>
+              Search {tabLabels[tab].toLowerCase()}
+              <input
+                type="search"
+                aria-label={`Search ${tab === "orders" ? "orders" : tabLabels[tab].toLowerCase()}`}
+                placeholder={
+                  tab === "orders"
+                    ? "Order, customer or status"
+                    : "Search this workspace"
+                }
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
+            {["orders", "payments"].includes(tab) && (
+              <label>
+                Status
+                <select
+                  aria-label="Filter workspace status"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="all">All statuses</option>
+                  {(tab === "payments"
+                    ? ["pending", "verified", "rejected"]
+                    : [
+                        "awaiting_payment",
+                        "payment_review",
+                        "confirmed",
+                        "preparing",
+                        "refund_requested",
+                        "refunded",
+                        "cancelled",
+                        "expired",
+                      ]
+                  ).map((value) => (
+                    <option key={value} value={value}>
+                      {value.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+        )}
+        {error && !accessChange && !order && !payment && !book && !campaign && (
           <p className="form-error" role="alert">
             {error}
           </p>
@@ -327,133 +375,135 @@ export function Admin() {
             <div className="stats-grid">
               {[
                 [
-                  money(collected),
-                  "Verified payments",
-                  "Book + postage receipts",
-                  Wallet,
+                  String(Math.max(0, CAPACITY - (c?.reserved || 0))),
+                  "Copies available",
+                  "Preview inventory",
                 ],
                 [
-                  h.data.orders.length,
-                  "Total orders",
-                  "Across all readers",
-                  Package,
+                  String(c?.reserved || 0),
+                  "Copies reserved",
+                  "Includes unpaid and review holds",
                 ],
                 [
-                  pending.length,
-                  "Awaiting verification",
-                  "Receipts ready for review",
-                  ShieldCheck,
+                  String(pending.length),
+                  "Receipts to review",
+                  "Protected from unpaid expiry",
                 ],
-                [money(due), "Outstanding balance", "Books and postage", Truck],
-              ].map(([value, label, sub, Icon], i) => {
-                const C = Icon as typeof Wallet;
-                return (
-                  <div
-                    className={"stat-card " + (i === 0 ? "accent" : "")}
-                    key={String(label)}
-                  >
-                    <span>
-                      {String(label)}
-                      <C size={18} />
-                    </span>
-                    <strong>{value as string}</strong>
-                    <small>{String(sub)}</small>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="dashboard-middle">
-              <div className="panel">
-                <div className="panel-title">
-                  <h2>Order flow</h2>
-                  <span className="eyebrow">ALL TIME</span>
+                [
+                  manager
+                    ? money(collected - refunded)
+                    : String(
+                        h.data.orders.filter((o) => o.status === "confirmed")
+                          .length,
+                      ),
+                  manager ? "Net verified payments" : "Confirmed preorders",
+                  manager ? "Less recorded refunds" : "Awaiting publication",
+                ],
+              ].map(([value, label, sub], i) => (
+                <div
+                  key={label}
+                  className={`stat-card ${i === 0 ? "accent" : ""}`}
+                >
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                  <small>{sub}</small>
                 </div>
-                <div className="flow-chart">
-                  {(
-                    [
-                      "awaiting_payment",
-                      "processing",
-                      "shipped",
-                      "completed",
-                    ] as const
-                  ).map((s, i) => {
-                    const count = h.data.orders.filter(
-                      (o) => o.status === s,
-                    ).length;
-                    return (
-                      <div key={s}>
-                        <span>{s.replaceAll("_", " ")}</span>
-                        <div>
-                          <i
-                            style={{
-                              width:
-                                (h.data.orders.length
-                                  ? (count / h.data.orders.length) * 100
-                                  : 0) + "%",
-                              background: [
-                                "#b9d559",
-                                "#a6b49f",
-                                "#79998d",
-                                "#455c49",
-                              ][i],
-                            }}
-                          />
-                        </div>
-                        <b>{count}</b>
-                      </div>
-                    );
-                  })}
+              ))}
+            </div>
+            <div className="preview-notice">
+              <ClockIcon />
+              <p>
+                All figures are preview records. Payment destination and live
+                checkout are disabled. Campaign dates, postage and reservation
+                limits are provisional.
+              </p>
+            </div>
+            {tab === "overview" && (
+              <>
+                <div className="workspace-actions">
+                  <button onClick={() => navigate("payments")}>
+                    <Receipt size={20} />
+                    <span>
+                      <b>{pending.length} receipts awaiting review</b>
+                      <small>Check transfers and resolve corrections</small>
+                    </span>
+                    <ArrowUpRight size={17} />
+                  </button>
+                  <button onClick={() => navigate("orders")}>
+                    <ShoppingBag size={20} />
+                    <span>
+                      <b>
+                        {
+                          h.data.orders.filter(
+                            (o) => o.status === "refund_requested",
+                          ).length
+                        }{" "}
+                        refund requests
+                      </b>
+                      <small>Review customer requests and order progress</small>
+                    </span>
+                    <ArrowUpRight size={17} />
+                  </button>
+                </div>
+                <div className="panel table-panel">
+                  <div className="panel-title">
+                    <h2>Recent orders</h2>
+                    <button
+                      className="text-link"
+                      onClick={() => navigate("orders")}
+                    >
+                      View all orders
+                    </button>
+                  </div>
+                  {table(
+                    [...h.data.orders]
+                      .sort(
+                        (a, b) =>
+                          Date.parse(b.created_at) - Date.parse(a.created_at),
+                      )
+                      .slice(0, 8),
+                  )}
+                </div>
+              </>
+            )}
+            {tab === "reports" && (
+              <div className="panel">
+                <h2>Payments and commitments</h2>
+                <div className="summary-line">
+                  <span>Gross approved payments</span>
+                  <b>{money(collected)}</b>
+                </div>
+                <div className="summary-line">
+                  <span>Recorded refunds</span>
+                  <b>{money(refunded)}</b>
+                </div>
+                <div className="summary-line">
+                  <span>Active order value (including unpaid)</span>
+                  <b>
+                    {money(
+                      h.data.orders
+                        .filter(holdsInventory)
+                        .reduce(
+                          (n, o) => n + o.book_total + o.shipping_total,
+                          0,
+                        ),
+                    )}
+                  </b>
                 </div>
                 <p className="fineprint">
-                  Counts reflect actual records in this workspace.
+                  An order reservation is not revenue. Refund requests remain
+                  commitments until an admin records the completed refund.
                 </p>
               </div>
-              <div className="review-callout">
-                <span className="eyebrow">NEEDS YOUR ATTENTION</span>
-                <ShieldCheck size={30} />
-                <h2>
-                  {pending.length
-                    ? pending.length + " receipts to review."
-                    : "You’re all caught up."}
-                </h2>
-                <p>
-                  {pending.length
-                    ? "A quick check gets the next story on its way."
-                    : "New payment receipts will appear here when readers submit them."}
-                </p>
-                <button
-                  className="text-link"
-                  onClick={() => setTab("payments")}
-                >
-                  Open payment review <ArrowRightIcon />
-                </button>
-              </div>
-            </div>
+            )}
           </>
         )}
-        {(tab === "overview" || tab === "orders") && (
+        {tab === "orders" && (
           <div className="panel table-panel">
             <div className="panel-title">
-              <h2>{tab === "overview" ? "Recent orders" : "All orders"}</h2>
-              {tab === "overview" ? (
-                <button className="text-link" onClick={() => setTab("orders")}>
-                  View all ↗
-                </button>
-              ) : (
-                <label className="search-field compact">
-                  <Search size={17} />
-                  <input
-                    aria-label="Search orders"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Order, reader or status"
-                  />
-                </label>
-              )}
+              <h2>Website orders</h2>
             </div>
-            {orderTable(
-              tab === "overview" ? h.data.orders.slice(0, 5) : selectedOrders,
-            )}
+            {table(filtered)}
           </div>
         )}
         {tab === "payments" && (
@@ -462,231 +512,247 @@ export function Admin() {
               <h2>Receipt queue</h2>
               <span>{pending.length} pending</span>
             </div>
-            {h.data.payments.length ? (
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Order</th>
-                      <th>Payment for</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...h.data.payments]
-                      .sort(
-                        (a, b) =>
-                          Number(b.status === "pending") -
-                          Number(a.status === "pending"),
-                      )
-                      .map((p) => (
-                        <tr key={p.id}>
-                          <td>#{p.order_id.slice(0, 8).toUpperCase()}</td>
-                          <td>{p.kind === "book" ? "Books" : "Postage"}</td>
-                          <td>{money(p.amount)}</td>
-                          <td>
-                            <Status value={p.status} />
-                          </td>
-                          <td>
-                            <button
-                              className="text-link"
-                              onClick={() => openPayment(p)}
-                            >
-                              {p.status === "pending" ? "Review" : "View"} ↗
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <Empty
-                title="No receipts to review."
-                text="Customers upload receipts from My orders. Book and postage payments are tracked separately."
-              />
-            )}
-          </div>
-        )}
-        {tab === "catalog" && (
-          <div className="panel table-panel">
-            <div className="panel-title">
-              <h2>{h.data.books.length} catalog entries</h2>
-              <label className="search-field compact">
-                <Search size={17} />
-                <input
-                  aria-label="Search catalog"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Title or author"
-                />
-              </label>
-            </div>
             <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>Book / author</th>
-                    <th>Category</th>
-                    <th>Price</th>
-                    <th>Stock</th>
+                    <th>Order</th>
+                    <th>Transfer reference</th>
+                    <th>Amount</th>
                     <th>Status</th>
-                    <th />
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {h.data.books
-                    .filter((b) =>
-                      (b.title + " " + b.author)
-                        .toLowerCase()
-                        .includes(search.toLowerCase()),
+                  {[...paymentRows]
+                    .sort(
+                      (a, b) =>
+                        Number(b.status === "pending") -
+                          Number(a.status === "pending") ||
+                        Date.parse(b.created_at) - Date.parse(a.created_at),
                     )
-                    .map((b) => (
-                      <tr key={b.id}>
-                        <td>
-                          <div className="table-book">
-                            <span style={{ background: b.color }} />
-                            <div>
-                              <b>{b.title}</b>
-                              <small>{b.author}</small>
-                            </div>
-                          </div>
+                    .map((p) => (
+                      <tr key={p.id}>
+                        <td data-label="Order">
+                          #{p.order_id.slice(0, 8).toUpperCase()}
                         </td>
-                        <td>{b.category}</td>
-                        <td>{money(b.price)}</td>
-                        <td>{b.format === "ebook" ? "Digital" : b.stock}</td>
-                        <td>
-                          <Status value={b.active ? "active" : "archived"} />
+                        <td data-label="Transfer reference">{p.reference}</td>
+                        <td data-label="Amount">{money(p.amount)}</td>
+                        <td data-label="Status">
+                          <Status value={p.status} />
                         </td>
-                        <td>
+                        <td data-label="Action">
                           <button
                             className="text-link"
-                            onClick={() => {
-                              setBook({ ...b });
-                              setError("");
-                            }}
+                            onClick={() => openPayment(p)}
                           >
-                            Edit ↗
+                            {p.status === "pending"
+                              ? "Review receipt"
+                              : "View decision"}
                           </button>
                         </td>
                       </tr>
                     ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
-        {tab === "campaigns" && (
-          <div className="admin-campaigns">
-            {h.data.campaigns.map((c) => (
-              <article className="panel" key={c.id}>
-                <Status value={c.active ? "active" : "closed"} />
-                <h2>{c.title}</h2>
-                <p>{h.data.books.find((b) => b.id === c.book_id)?.title}</p>
-                <progress
-                  max={c.capacity}
-                  value={c.reserved}
-                  aria-label="Campaign capacity"
-                />
-                <div className="summary-line">
-                  <span>{c.reserved} reservations</span>
-                  <b>{c.capacity} capacity</b>
-                </div>
-                <p className="fineprint">
-                  Release:{" "}
-                  {new Date(c.release_at).toLocaleDateString("en-MY", {
-                    timeZone: "Asia/Kuala_Lumpur",
-                  })}
+              {!paymentRows.length && (
+                <p className="workspace-empty">
+                  No matching receipts. Customers submit evidence from My
+                  orders.
                 </p>
-                <button
-                  className="button secondary"
-                  onClick={() => {
-                    setCampaign({ ...c });
-                    setError("");
-                  }}
-                >
-                  Manage campaign <Settings2 size={16} />
-                </button>
-              </article>
-            ))}
+              )}
+            </div>
           </div>
         )}
-        {tab === "customers" && (
+        {tab === "catalog" && manager && (
           <div className="panel table-panel">
-            <div className="panel-title">
-              <h2>Reader directory</h2>
-            </div>
             <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>Reader</th>
-                    <th>Account ID</th>
-                    <th>Role</th>
-                    <th>Orders</th>
+                    <th>Book</th>
+                    <th>Availability</th>
+                    <th>Visibility</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {h.data.profiles.map((p) => (
-                    <tr key={p.id}>
-                      <td>
-                        <b>{p.display_name}</b>
+                  {catalogRows.map((b) => (
+                    <tr key={b.id}>
+                      <td data-label="Book">
+                        <div className="workspace-book">
+                          <BookCover book={b} small />
+                          <div>
+                            <b>{b.title}</b>
+                            <small>{b.author}</small>
+                          </div>
+                        </div>
                       </td>
-                      <td>{p.id.slice(0, 8)}</td>
-                      <td>
-                        <Status value={p.role} />
+                      <td data-label="Availability">
+                        {b.sale_mode === "preorder"
+                          ? "KACAU preorder · RM30"
+                          : "Catalog only"}
                       </td>
-                      <td>
-                        {
-                          h.data.orders.filter((o) => o.customer_id === p.id)
-                            .length
-                        }
+                      <td data-label="Visibility">
+                        {b.active ? "Visible" : "Hidden"}
+                      </td>
+                      <td data-label="Action">
+                        <button
+                          className="text-link"
+                          onClick={() => {
+                            setBook({ ...b });
+                            setError("");
+                          }}
+                        >
+                          Edit book
+                        </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {!catalogRows.length && (
+              <p className="workspace-empty">No matching books.</p>
+            )}
             <p className="fineprint padded">
-              Roles can only be changed by the database owner. Customers cannot
-              promote themselves.
+              Only KACAU can be purchased. The edition price and 1,000-copy
+              ceiling are fixed for this launch.
             </p>
           </div>
         )}
-        {tab === "reports" && (
+        {tab === "campaigns" && manager && !c && (
+          <p className="workspace-empty">
+            The launch campaign is unavailable. No schedule changes can be made.
+          </p>
+        )}
+        {tab === "campaigns" && manager && c && (
           <div className="panel">
-            <h2>Sales by title</h2>
+            <Status value={c.active ? "active" : "paused"} />
+            <h2 className="spaced">{c.title}</h2>
+            <progress
+              value={c.reserved}
+              max={CAPACITY}
+              aria-label="Reserved copies"
+            />
+            <div className="summary-line">
+              <span>Reserved / print run</span>
+              <b>
+                {c.reserved} / {CAPACITY}
+              </b>
+            </div>
+            <p>
+              Opens:{" "}
+              {new Date(c.opens_at).toLocaleString("en-MY", {
+                timeZone: "Asia/Kuala_Lumpur",
+              })}{" "}
+              MYT
+            </p>
+            <p>
+              Closes:{" "}
+              {new Date(c.closes_at).toLocaleString("en-MY", {
+                timeZone: "Asia/Kuala_Lumpur",
+              })}{" "}
+              MYT
+            </p>
+            <div className="button-row">
+              <button
+                className="button secondary"
+                onClick={() => {
+                  setCampaign({ ...c });
+                  setError("");
+                }}
+              >
+                Edit preview schedule
+              </button>
+              <button
+                disabled={busy}
+                className="button primary"
+                onClick={() =>
+                  act(() => h.saveCampaign({ ...c, active: !c.active }))
+                }
+              >
+                {c.active ? <Pause size={16} /> : <Play size={16} />}
+                {c.active ? "Pause new preorders" : "Resume preorders"}
+              </button>
+            </div>
             <p className="fineprint">
-              Ordered units and gross book value. Verified receipts are reported
-              separately above.
+              Pausing prevents new reservations. Existing customers can still
+              submit eligible receipts. Publication remains 1 November 2026.
+            </p>
+          </div>
+        )}
+        {tab === "people" && manager && (
+          <div className="panel">
+            <p>
+              Mock identities only. Real invitations and Google login are
+              deferred. Admins manage customer/staff roles; superadmins manage
+              elevated roles.
             </p>
             <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>Title</th>
-                    <th>Ordered units</th>
-                    <th>Gross value</th>
+                    <th>Account</th>
+                    <th>Role</th>
+                    <th>Access</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {h.data.books.map((b) => {
-                    const items = h.data.orders
-                      .flatMap((o) => o.items)
-                      .filter((i) => i.book_id === b.id);
+                  {peopleRows.map((p) => {
+                    const editable =
+                      p.id !== h.profile?.id &&
+                      (security || ["staff", "customer"].includes(p.role));
                     return (
-                      <tr key={b.id}>
-                        <td>{b.title}</td>
-                        <td>{items.reduce((s, i) => s + i.quantity, 0)}</td>
-                        <td>
-                          {money(
-                            items.reduce(
-                              (s, i) => s + i.quantity * i.unit_price,
-                              0,
-                            ),
-                          )}
+                      <tr key={p.id}>
+                        <td data-label="Account">
+                          <b>{p.display_name}</b>
+                          <small>
+                            {p.active === false ? "Inactive" : "Active"}
+                            {p.id === h.profile?.id ? " · Your account" : ""}
+                          </small>
+                        </td>
+                        <td data-label="Role">
+                          <select
+                            aria-label={`Role for ${p.display_name}`}
+                            disabled={!editable || busy}
+                            value={p.role}
+                            onChange={(e) =>
+                              setAccessChange({
+                                profile: p,
+                                role: e.target.value as Profile["role"],
+                                active: p.active !== false,
+                              })
+                            }
+                          >
+                            {(security
+                              ? ["customer", "staff", "admin", "superadmin"]
+                              : [
+                                  "customer",
+                                  "staff",
+                                  ...(!["customer", "staff"].includes(p.role)
+                                    ? [p.role]
+                                    : []),
+                                ]
+                            ).map((r) => (
+                              <option key={r}>{r}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td data-label="Access">
+                          <button
+                            className="text-link"
+                            disabled={!editable || busy}
+                            onClick={() =>
+                              setAccessChange({
+                                profile: p,
+                                role: p.role,
+                                active: p.active === false,
+                              })
+                            }
+                          >
+                            {p.active === false ? "Reactivate" : "Deactivate"}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -694,119 +760,183 @@ export function Admin() {
                 </tbody>
               </table>
             </div>
+            {!peopleRows.length && (
+              <p className="workspace-empty">No matching accounts.</p>
+            )}
+          </div>
+        )}
+        {tab === "audit" && manager && (
+          <div className="panel">
+            <ol className="order-timeline">
+              {auditRows.map((e) => (
+                <li key={e.id}>
+                  <span>
+                    {new Date(e.created_at).toLocaleString("en-MY", {
+                      timeZone: "Asia/Kuala_Lumpur",
+                    })}{" "}
+                    ·{" "}
+                    {h.data.profiles.find((p) => p.id === e.actor_id)
+                      ?.display_name || e.actor_id}
+                  </span>
+                  <strong>{e.action}</strong>
+                  <p>{e.detail}</p>
+                </li>
+              ))}
+            </ol>
+            {!auditRows.length && (
+              <p className="workspace-empty">No matching activity.</p>
+            )}
+          </div>
+        )}
+        {tab === "security" && security && (
+          <div className="panel">
+            <h2>Launch controls</h2>
+            <div className="summary-line">
+              <span>Authentication</span>
+              <b>Mock only · Google deferred</b>
+            </div>
+            <div className="summary-line">
+              <span>Payment destination</span>
+              <b>Not configured</b>
+            </div>
+            <div className="summary-line">
+              <span>Tracking</span>
+              <b>Deferred</b>
+            </div>
+            <div className="summary-line">
+              <span>Live website checkout</span>
+              <b>Disabled</b>
+            </div>
+            <p className="fineprint">
+              A live build fails closed while the Supabase transaction model,
+              RLS, real authentication, merchant QR and final policies are
+              pending. No service keys or payment account secrets belong in this
+              browser.
+            </p>
+            <h3 className="spaced">Role boundaries</h3>
+            <div className="workspace-role-grid">
+              <div>
+                <b>Staff</b>
+                <p>
+                  Review receipts and manage order progress. No catalog, finance
+                  exports or access management.
+                </p>
+              </div>
+              <div>
+                <b>Admin</b>
+                <p>
+                  Manage catalog, campaigns, refunds and customer/staff access.
+                  Cannot appoint administrators.
+                </p>
+              </div>
+              <div>
+                <b>Superadmin</b>
+                <p>
+                  Govern elevated access and launch readiness. Own access and
+                  the last superadmin remain protected.
+                </p>
+              </div>
+            </div>
+            <h3 className="spaced">Access changes</h3>
+            {!(h.data.events || []).some(
+              (event) => event.action === "access.updated",
+            ) && <p className="workspace-empty">No access changes recorded.</p>}
+            {(h.data.events || [])
+              .filter((e) => e.action === "access.updated")
+              .map((e) => (
+                <p key={e.id}>{e.detail}</p>
+              ))}
           </div>
         )}
       </section>
+      {accessChange && (
+        <Modal
+          title="Confirm access change"
+          onClose={() => !busy && setAccessChange(null)}
+        >
+          <p>
+            <strong>{accessChange.profile.display_name}</strong>
+          </p>
+          <div className="summary-line">
+            <span>Role</span>
+            <b>
+              {accessChange.profile.role} → {accessChange.role}
+            </b>
+          </div>
+          <div className="summary-line">
+            <span>Account access</span>
+            <b>{accessChange.active ? "Active" : "Deactivated"}</b>
+          </div>
+          <p className="fineprint">
+            This changes the account’s workspace permissions and records an
+            audit event. Your own access and the last active superadmin are
+            protected.
+          </p>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="button-row">
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={() => setAccessChange(null)}
+            >
+              Keep current access
+            </button>
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={() =>
+                act(
+                  () =>
+                    h.changeRole(
+                      accessChange.profile.id,
+                      accessChange.role,
+                      accessChange.active,
+                    ),
+                  () => setAccessChange(null),
+                )
+              }
+            >
+              Confirm access change
+            </button>
+          </div>
+        </Modal>
+      )}
       {book && (
         <Modal
-          title={
-            h.data.books.some((b) => b.id === book.id)
-              ? "Edit catalog entry"
-              : "Add a book"
-          }
+          title="Edit catalog entry"
           onClose={() => !busy && setBook(null)}
         >
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void act(
+              act(
                 () => h.saveBook(book),
                 () => setBook(null),
               );
             }}
           >
-            <div className="form-grid">
-              <label>
-                Title
-                <input
-                  required
-                  maxLength={160}
-                  value={book.title}
-                  onChange={(e) => setBook({ ...book, title: e.target.value })}
-                />
-              </label>
-              <label>
-                Author
-                <input
-                  required
-                  maxLength={100}
-                  value={book.author}
-                  onChange={(e) => setBook({ ...book, author: e.target.value })}
-                />
-              </label>
-              <label>
-                Category
-                <input
-                  required
-                  maxLength={60}
-                  value={book.category}
-                  onChange={(e) =>
-                    setBook({ ...book, category: e.target.value })
-                  }
-                />
-              </label>
-              <label>
-                Format
-                <select
-                  disabled={h.data.books.some((b) => b.id === book.id)}
-                  value={book.format}
-                  onChange={(e) =>
-                    setBook({
-                      ...book,
-                      format: e.target.value as Book["format"],
-                    })
-                  }
-                >
-                  <option value="physical">Paperback</option>
-                  <option value="ebook">Ebook record</option>
-                </select>
-              </label>
-              <label>
-                Demo price (MYR)
-                <input
-                  type="number"
-                  min=".01"
-                  max="999999"
-                  step=".01"
-                  required
-                  value={book.price}
-                  onChange={(e) =>
-                    setBook({ ...book, price: Number(e.target.value) })
-                  }
-                />
-              </label>
-              <label>
-                Available stock
-                <input
-                  type="number"
-                  min="0"
-                  max="1000000"
-                  required
-                  value={book.stock}
-                  onChange={(e) =>
-                    setBook({ ...book, stock: Number(e.target.value) })
-                  }
-                />
-              </label>
-              <label>
-                Cover colour
-                <input
-                  type="color"
-                  value={book.color}
-                  onChange={(e) => setBook({ ...book, color: e.target.value })}
-                />
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={book.active}
-                  onChange={(e) =>
-                    setBook({ ...book, active: e.target.checked })
-                  }
-                />{" "}
-                Visible in catalog
-              </label>
-            </div>
+            <label>
+              Title
+              <input
+                required
+                maxLength={160}
+                value={book.title}
+                onChange={(e) => setBook({ ...book, title: e.target.value })}
+              />
+            </label>
+            <label>
+              Author
+              <input
+                required
+                maxLength={100}
+                value={book.author}
+                onChange={(e) => setBook({ ...book, author: e.target.value })}
+              />
+            </label>
             <label>
               Description
               <textarea
@@ -818,120 +948,72 @@ export function Admin() {
                 }
               />
             </label>
-            <p className="fineprint">
-              New entries are labelled demo data. Existing public provenance is
-              preserved. The form assigns one author and category; the database
-              supports multiple via join tables.
-            </p>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={book.active}
+                onChange={(e) => setBook({ ...book, active: e.target.checked })}
+              />
+              Visible in catalog
+            </label>
             {error && (
               <p className="form-error" role="alert">
                 {error}
               </p>
             )}
             <button className="button primary wide" disabled={busy}>
-              {busy ? "Saving…" : "Save book"}
+              Save book
             </button>
           </form>
         </Modal>
       )}
       {campaign && (
         <Modal
-          title="Manage preorder campaign"
+          title="Preview campaign schedule"
           onClose={() => !busy && setCampaign(null)}
         >
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void act(
+              act(
                 () => h.saveCampaign(campaign),
                 () => setCampaign(null),
               );
             }}
           >
-            <label>
-              Campaign name
-              <input
-                required
-                value={campaign.title}
-                maxLength={160}
-                onChange={(e) =>
-                  setCampaign({ ...campaign, title: e.target.value })
-                }
-              />
-            </label>
-            <label>
-              Book
-              <select
-                aria-label="Book"
-                disabled={h.data.campaigns.some((c) => c.id === campaign.id)}
-                value={campaign.book_id}
-                onChange={(e) =>
-                  setCampaign({ ...campaign, book_id: e.target.value })
-                }
-              >
-                {h.data.books
-                  .filter((b) => b.active)
-                  .map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.title}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <div className="form-grid">
-              {(["opens_at", "closes_at", "release_at"] as const).map((k) => (
-                <label key={k}>
-                  {k === "opens_at"
-                    ? "Opens (UTC)"
-                    : k === "closes_at"
-                      ? "Closes (UTC)"
-                      : "Release (UTC)"}
-                  <input
-                    type="datetime-local"
-                    required
-                    value={campaign[k].slice(0, 16)}
-                    onChange={(e) =>
+            <p>
+              All inputs use Malaysia time (UTC+08:00). These are preview dates
+              until the launch window is confirmed.
+            </p>
+            {(["opens_at", "closes_at"] as const).map((key) => (
+              <label key={key}>
+                {key === "opens_at"
+                  ? "Opens (Malaysia time)"
+                  : "Closes (Malaysia time)"}
+                <input
+                  type="datetime-local"
+                  required
+                  value={localInput(campaign[key])}
+                  onChange={(e) => {
+                    if (e.target.value)
                       setCampaign({
                         ...campaign,
-                        [k]: e.target.value ? e.target.value + ":00Z" : "",
-                      })
-                    }
-                  />
-                </label>
-              ))}
-              <label>
-                Capacity
-                <input
-                  type="number"
-                  min={Math.max(1, campaign.reserved)}
-                  required
-                  value={campaign.capacity}
-                  onChange={(e) =>
-                    setCampaign({
-                      ...campaign,
-                      capacity: Number(e.target.value),
-                    })
-                  }
+                        [key]: new Date(
+                          `${e.target.value}:00+08:00`,
+                        ).toISOString(),
+                      });
+                  }}
                 />
               </label>
-            </div>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={campaign.active}
-                onChange={(e) =>
-                  setCampaign({ ...campaign, active: e.target.checked })
-                }
-              />{" "}
-              Accept reservations within campaign dates
-            </label>
+            ))}
+            <p>Print run: 1,000. Expected publication: 1 November 2026.</p>
             {error && (
               <p className="form-error" role="alert">
                 {error}
               </p>
             )}
             <button className="button primary wide" disabled={busy}>
-              {busy ? "Saving…" : "Save campaign"}
+              Save schedule
             </button>
           </form>
         </Modal>
@@ -942,20 +1024,16 @@ export function Admin() {
           onClose={() => {
             if (!busy) {
               setPayment(null);
-              if (receiptUrl.startsWith("blob:"))
-                URL.revokeObjectURL(receiptUrl);
+              setReceiptUrl("");
             }
           }}
         >
           <div className="summary-line">
-            <span>
-              {payment.kind === "book" ? "Books" : "Postage"} · #
-              {payment.order_id.slice(0, 8)}
-            </span>
+            <span>Order #{payment.order_id.slice(0, 8).toUpperCase()}</span>
             <strong>{money(payment.amount)}</strong>
           </div>
+          <p>Reference: {payment.reference}</p>
           <Status value={payment.status} />
-          <p>Compare the receipt with your bank record before verifying.</p>
           {receiptUrl ? (
             <a
               className="button secondary"
@@ -963,7 +1041,7 @@ export function Admin() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Open receipt in new tab <ArrowUpRight size={16} />
+              Open receipt
             </a>
           ) : (
             <button
@@ -975,53 +1053,88 @@ export function Admin() {
                 )
               }
             >
-              Load private receipt <ShieldCheck size={16} />
+              Load private receipt
             </button>
           )}
+          {payment.status === "pending" &&
+            h.data.orders.find((o) => o.id === payment.order_id)
+              ?.customer_id === h.profile?.id && (
+              <p className="form-error">
+                Another staff member must review your own payment.
+              </p>
+            )}
           {payment.status === "pending" ? (
             <>
+              <p>
+                Compare the transfer against the merchant bank record. A receipt
+                alone does not confirm funds.
+              </p>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => setChecked(e.target.checked)}
+                />
+                I checked the payee, amount and reference against the bank
+                record (simulated in preview).
+              </label>
               <label>
-                Review note / rejection reason
+                Decision note / rejection reason
                 <textarea
-                  value={note}
                   maxLength={500}
+                  value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Record your verification or explain what needs correcting."
                 />
               </label>
               <div className="button-row">
                 <button
+                  disabled={
+                    busy ||
+                    note.trim().length < 3 ||
+                    h.data.orders.find((o) => o.id === payment.order_id)
+                      ?.customer_id === h.profile?.id
+                  }
                   className="button secondary"
-                  disabled={busy}
                   onClick={() =>
                     act(
                       () => h.review(payment.id, false, note),
-                      () => setPayment(null),
+                      () => {
+                        setPayment(null);
+                        setReceiptUrl("");
+                      },
                     )
                   }
                 >
-                  <X size={16} /> Reject
+                  <X size={16} />
+                  Reject receipt
                 </button>
                 <button
+                  disabled={
+                    busy ||
+                    !checked ||
+                    !receiptUrl ||
+                    note.trim().length < 3 ||
+                    h.data.orders.find((o) => o.id === payment.order_id)
+                      ?.customer_id === h.profile?.id
+                  }
                   className="button primary"
-                  disabled={busy || !receiptUrl}
                   onClick={() =>
                     act(
                       () => h.review(payment.id, true, note),
-                      () => setPayment(null),
+                      () => {
+                        setPayment(null);
+                        setReceiptUrl("");
+                      },
                     )
                   }
                 >
-                  <Check size={16} /> Verify payment
+                  <Check size={16} />
+                  Approve payment
                 </button>
               </div>
-              <p className="fineprint">
-                Load the receipt before approving. Verified book payments grant
-                ebook entitlements automatically.
-              </p>
             </>
           ) : (
-            <p>{payment.note || "No review note."}</p>
+            <p>{payment.note}</p>
           )}
           {error && (
             <p className="form-error" role="alert">
@@ -1032,72 +1145,98 @@ export function Admin() {
       )}
       {order && (
         <Modal
-          title={"Order #" + order.id.slice(0, 8).toUpperCase()}
+          title={`Order #${order.id.slice(0, 8).toUpperCase()}`}
           onClose={() => !busy && setOrder(null)}
         >
           <Status value={order.status} />
-          <h3>{order.customer_name}</h3>
+          <h3 className="spaced">{order.customer_name}</h3>
+          <p>
+            {order.address}
+            <br />
+            {order.phone} · {order.email}
+          </p>
           {order.items.map((i) => (
             <p key={i.book_id}>
               {i.quantity} × {i.title}
-              {i.campaign_id ? " · preorder" : ""}
             </p>
           ))}
-          <p className="address">{order.address || "Digital-only order"}</p>
-          <div className="summary-line">
-            <span>Book balance</span>
-            <b>{money(balance(order, h.data.payments, "book"))}</b>
-          </div>
-          <div className="summary-line">
-            <span>Postage balance</span>
-            <b>{money(balance(order, h.data.payments, "shipping"))}</b>
-          </div>
-          {order.status === "processing" && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void act(
-                  () => h.fulfill(order.id, tracking),
-                  () => setOrder(null),
-                );
-              }}
-            >
-              <label>
-                Tracking number
-                <input
-                  required
-                  minLength={3}
-                  maxLength={120}
-                  value={tracking}
-                  onChange={(e) => setTracking(e.target.value)}
-                />
-              </label>
-              <button className="button primary wide" disabled={busy}>
-                Mark as shipped <Truck size={16} />
+          <p>Total: {money(order.book_total + order.shipping_total)}</p>
+          <label>
+            Update reason / refund transaction reference
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={500}
+            />
+          </label>
+          <div className="button-row">
+            {order.status === "awaiting_payment" && (
+              <button
+                className="button secondary"
+                disabled={busy}
+                onClick={() =>
+                  act(
+                    () => h.transition(order.id, "cancel", note),
+                    () => setOrder(null),
+                  )
+                }
+              >
+                Cancel unpaid order
               </button>
-              <p className="fineprint">
-                Both payments must be verified and preorder release dates
-                reached.
-              </p>
-            </form>
-          )}
-          {order.status === "shipped" && (
-            <>
-              <p>Tracking: {order.tracking_number}</p>
+            )}
+            {order.status === "confirmed" && (
               <button
                 className="button primary"
                 disabled={busy}
                 onClick={() =>
                   act(
-                    () => h.fulfill(order.id, tracking, true),
+                    () => h.transition(order.id, "prepare", note),
                     () => setOrder(null),
                   )
                 }
               >
-                Confirm delivered
+                Mark as preparing
               </button>
-            </>
+            )}
+            {["confirmed", "preparing"].includes(order.status) && (
+              <button
+                className="button secondary"
+                disabled={busy}
+                onClick={() =>
+                  act(
+                    () => h.transition(order.id, "request_refund", note),
+                    () => setOrder(null),
+                  )
+                }
+              >
+                Request refund review
+              </button>
+            )}
+            {order.status === "refund_requested" && manager && (
+              <button
+                className="button primary"
+                disabled={busy}
+                onClick={() =>
+                  act(
+                    () => h.transition(order.id, "refund", note),
+                    () => setOrder(null),
+                  )
+                }
+              >
+                Record completed refund
+              </button>
+            )}
+          </div>
+          {order.status === "refund_requested" && (
+            <p className="fineprint">
+              Only record completion after the manual refund has been sent.
+              Include its reference. This preview does not transfer funds.
+            </p>
           )}
+          <p className="fineprint">
+            Preparation is blocked before expected publication. Tracking is
+            deferred.
+          </p>
           {error && (
             <p className="form-error" role="alert">
               {error}
@@ -1108,6 +1247,6 @@ export function Admin() {
     </div>
   );
 }
-function ArrowRightIcon() {
-  return <span aria-hidden="true">→</span>;
+function ClockIcon() {
+  return <ShieldCheck size={20} />;
 }

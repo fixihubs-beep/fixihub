@@ -14,6 +14,8 @@ import {
   Download,
 } from "lucide-react";
 import { useHub } from "./provider";
+import { AccountMenu } from "./account-menu";
+import { FixiLoading } from "./fixi-feedback";
 type InstallEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: string }>;
@@ -54,9 +56,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
       <div className="topline">
-        <span>INDEPENDENT STORIES. CONNECTED READERS.</span>
+        <span>FIXIHUB / THE INDEPENDENT BOOKSHELF</span>
         <span>
-          {h.demo ? "ACADEMIC DEMO · NO REAL PAYMENTS" : "ACADEMIC PROTOTYPE"}{" "}
+          {h.demo
+            ? "PREVIEW · NO REAL PAYMENTS"
+            : "WEBSITE PREORDERS COMING SOON"}{" "}
           <span className="dot" />
         </span>
       </div>
@@ -80,7 +84,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ["/catalog", "All books"],
             ["/preorders", "Preorders"],
             ["/orders", "My orders"],
-            ["/library", "My library"],
           ].map(([url, label]) => (
             <Link key={url} href={url} className={path === url ? "active" : ""}>
               {label}
@@ -99,10 +102,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           >
             {dark ? <Sun size={19} /> : <Moon size={19} />}
           </button>
-          <Link className="account-link" href="/account">
-            {h.profile?.display_name.split(" ")[0] || "Sign in"}{" "}
-            <ArrowUpRight size={14} />
-          </Link>
+          <AccountMenu />
           <Link
             href="/cart"
             className="bag"
@@ -137,7 +137,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <button onClick={() => void h.refresh()}>Retry connection</button>
         </div>
       )}
-      <main id="main">{children}</main>
+      <main id="main">{h.ready ? children : <FixiLoading />}</main>
       <footer>
         <div>
           <Link className="brand" href="/">
@@ -155,24 +155,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Link>
           <p>Good stories deserve a better home.</p>
           <small>
-            Independent student project. Not affiliated with or endorsed by Buku
-            FIXI.
+            KACAU: Movie Tie-In · Ariff Adly · 328 pages.
             <br />
-            FIXI logo credited to its owner. Independent academic prototype.
+            Expected publication 1 November 2026. Artwork belongs to its owners.
           </small>
         </div>
         <div className="footer-links">
           <Link href="/about">
-            Project & sources <ArrowUpRight size={14} />
+            Preorder information <ArrowUpRight size={14} />
           </Link>
           <Link href="/admin">
             <LayoutDashboard size={15} /> Publisher workspace
           </Link>
-          {h.demo && (
-            <button onClick={h.switchDemo}>
-              Switch to demo {h.profile?.role === "admin" ? "reader" : "admin"}
-            </button>
-          )}
+          {h.demo && <Link href="/account">Switch preview account</Link>}
           {install && (
             <button
               onClick={async () => {
@@ -192,6 +187,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <br />
             THE NEXT CHAPTER.
           </span>
+        </div>
+        <div className="footer-credit">
+          <nav className="footer-legal" aria-label="Legal information">
+            <Link href="/terms">Terms of Service</Link>
+            <Link href="/privacy">Privacy Policy</Link>
+          </nav>
+          <span>Made by</span>{" "}
+          <a href="https://seladevs.my" target="_blank" rel="noopener noreferrer">
+            seladevs.my
+          </a>
         </div>
       </footer>
       {h.toast && (

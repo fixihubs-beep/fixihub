@@ -10,6 +10,7 @@ import {
 } from "three";
 import { useMemo, useRef, useEffect, useState } from "react";
 import type { Book } from "@/lib/types";
+import { KACAU_COVER } from "@/lib/covers";
 // Use the dominant front-cover tone for unscanned backs and spines.
 function frontTone(texture: Texture, fallback: string) {
   try {
@@ -38,7 +39,7 @@ function frontTone(texture: Texture, fallback: string) {
     return fallback;
   }
 }
-function useCover(url?: string | null) {
+function useCover(url?: string | null, face: "front" | "back" = "front") {
   const [texture, setTexture] = useState<Texture | null>(null);
   useEffect(() => {
     setTexture(null);
@@ -53,6 +54,10 @@ function useCover(url?: string | null) {
           return;
         }
         tex.colorSpace = SRGBColorSpace;
+        if (url === KACAU_COVER) {
+          tex.repeat.x = 709 / 1536;
+          tex.offset.x = face === "front" ? 827 / 1536 : 0;
+        }
         loaded = tex;
         setTexture(tex);
       },
@@ -65,7 +70,7 @@ function useCover(url?: string | null) {
       active = false;
       loaded?.dispose();
     };
-  }, [url]);
+  }, [url, face]);
   return texture;
 }
 function Volume({
@@ -80,7 +85,7 @@ function Volume({
   scale?: number;
 }) {
   const coverTexture = useCover(book.cover_image);
-  const backTexture = useCover(book.back_cover_image);
+  const backTexture = useCover(book.back_cover_image, "back");
   const bindingColor = useMemo(
     () => (coverTexture ? frontTone(coverTexture, book.color) : book.color),
     [coverTexture, book.color],

@@ -1,4 +1,9 @@
 import { Cart } from "@/components/screens";
-export default function Page() {
-  return <Cart />;
+import { CheckoutGate } from "@/components/queue";
+export default function CartPage() {
+  return (
+    <CheckoutGate>
+      <Cart />
+    </CheckoutGate>
+  );
 }

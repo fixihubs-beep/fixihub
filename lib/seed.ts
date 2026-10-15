@@ -1,4 +1,4 @@
-import { withBookCover } from "./covers";
+import { withBookCover, KACAU_COVER } from "./covers";
 import { Book, Data } from "./types";
 export const uid = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -86,30 +86,82 @@ export const books: Book[] = [
     cover_image: `/covers/${slug}.jpg`,
     source_url: i < 6 ? source : null,
     provenance: i < 6 ? "public_metadata" : "demo",
-    active: true,
+    active: i < 6,
+    sale_mode: "catalog_only",
   });
 });
 export const demoCustomer = uid(100);
+books.push({
+  id: uid(9),
+  slug: "kacau-movie-tie-in",
+  title: "KACAU: Movie Tie-In",
+  author: "Ariff Adly",
+  category: "Movie Tie-In",
+  price: 30,
+  stock: 0,
+  color: "#19b467",
+  description:
+    "The limited edition for the upcoming KACAU movie. Only 1,000 copies, with no reprint. Expected publication on 1 November 2026.",
+  format: "physical",
+  cover_image: KACAU_COVER,
+  back_cover_image: KACAU_COVER,
+  source_url: null,
+  provenance: "public_metadata",
+  active: true,
+  sale_mode: "preorder",
+  page_count: 328,
+  publication_date: "2026-11-01",
+});
 export const initialData: Data = {
   books,
   campaigns: [
     {
       id: uid(200),
-      book_id: uid(7),
-      title: "Kota Selepas Hujan · First edition",
-      opens_at: "2026-01-01T00:00:00Z",
-      closes_at: "2027-12-31T15:59:59Z",
-      release_at: "2028-01-15T00:00:00Z",
-      capacity: 300,
+      book_id: uid(9),
+      title: "KACAU · Limited movie tie-in edition",
+      opens_at: "2026-10-14T16:00:00Z",
+      closes_at: "2026-10-31T15:59:59Z",
+      release_at: "2026-10-31T16:00:00Z",
+      capacity: 1000,
       reserved: 0,
       active: true,
+      featured: true,
     },
   ],
   orders: [],
   payments: [],
   entitlements: [],
   profiles: [
-    { id: demoCustomer, display_name: "Demo Reader", role: "customer" },
+    {
+      id: demoCustomer,
+      display_name: "Aina · Preview customer",
+      email: "aina@example.test",
+      role: "customer",
+      active: true,
+    },
+    {
+      id: uid(101),
+      display_name: "Daniel · Second customer",
+      email: "daniel@example.test",
+      role: "customer",
+      active: true,
+    },
+    {
+      id: uid(102),
+      display_name: "Sarah · Staff",
+      email: "sarah@example.test",
+      role: "staff",
+      active: true,
+    },
+    { id: uid(103), display_name: "Amir · Admin", email: "amir@example.test", role: "admin", active: true },
+    {
+      id: uid(104),
+      display_name: "Hana · Superadmin",
+      email: "hana@example.test",
+      role: "superadmin",
+      active: true,
+    },
   ],
   access: [],
+  events: [],
 };

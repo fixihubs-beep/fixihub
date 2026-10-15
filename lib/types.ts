@@ -14,6 +14,9 @@ export type Book = {
   source_url: string | null;
   provenance: "public_metadata" | "demo";
   active: boolean;
+  sale_mode?: "catalog_only" | "preorder";
+  page_count?: number;
+  publication_date?: string;
 };
 export type Campaign = {
   id: string;
@@ -25,6 +28,7 @@ export type Campaign = {
   capacity: number;
   reserved: number;
   active: boolean;
+  featured?: boolean;
 };
 export type CartItem = {
   book_id: string;
@@ -48,18 +52,36 @@ export type Payment = {
   receipt_path: string;
   note: string;
   created_at: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  reference?: string;
 };
 export type Order = {
   id: string;
   customer_id: string;
   customer_name: string;
   created_at: string;
-  status: "awaiting_payment" | "processing" | "shipped" | "completed";
+  status:
+    | "awaiting_payment"
+    | "payment_review"
+    | "confirmed"
+    | "preparing"
+    | "cancelled"
+    | "expired"
+    | "refund_requested"
+    | "refunded"
+    | "processing"
+    | "shipped"
+    | "completed";
   book_total: number;
   shipping_total: number;
   address: string;
   tracking_number: string | null;
   items: OrderItem[];
+  request_id?: string;
+  expires_at?: string;
+  phone?: string;
+  email?: string;
 };
 export type Entitlement = {
   id: string;
@@ -70,10 +92,18 @@ export type Entitlement = {
   active: boolean;
   created_at: string;
 };
+export type SavedDelivery = {
+  dialCode: string; phone: string; recipient: string; address1: string; address2: string;
+  postcode: string; city: string; country: string; region: string;
+};
 export type Profile = {
+  avatar_url?: string;
+  delivery?: SavedDelivery;
   id: string;
+  email?: string;
   display_name: string;
-  role: "customer" | "admin";
+  role: "customer" | "staff" | "admin" | "superadmin";
+  active?: boolean;
 };
 export type AccessRecord = {
   id: string;
@@ -89,4 +119,13 @@ export type Data = {
   entitlements: Entitlement[];
   profiles: Profile[];
   access: AccessRecord[];
+  events?: AuditEvent[];
+};
+export type AuditEvent = {
+  id: string;
+  actor_id: string;
+  order_id?: string;
+  action: string;
+  detail: string;
+  created_at: string;
 };
