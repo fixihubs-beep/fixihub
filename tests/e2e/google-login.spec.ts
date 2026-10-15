@@ -67,3 +67,30 @@ test("verified Google session shows profile, saves name and signs out", async ({
   await expect(page.locator("header").getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
   expect(await page.evaluate(key => localStorage.getItem(key), authKey)).toBeNull();
 });
+
+for (const destination of ['/auth/callback', '/']) {
+ test(`Google return to ${destination} completes once and survives reload`, async ({ page }) => {
+  const user = { id:'33333333-3333-4333-8333-333333333333',aud:'authenticated',role:'authenticated',email:'callback@example.test',created_at:'2026-10-16T00:00:00Z',app_metadata:{provider:'google',providers:['google']},identities:[{provider:'google',id:'callback-google'}],user_metadata:{full_name:'Callback Reader'} };
+  let exchanges=0;
+  await page.route('**/rest/v1/rpc/**',route=>route.fulfill({status:404,json:{code:'PGRST202'}}));
+  await page.route('**/auth/v1/user',route=>route.fulfill({json:user}));
+  await page.route('**/auth/v1/token?**',route=>{
+   exchanges++;
+   const expiry=Math.floor(Date.now()/1000)+3600;
+   const jwt=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url')+'.'+Buffer.from(JSON.stringify({sub:user.id,exp:expiry})).toString('base64url')+'.test';
+   return route.fulfill({json:{access_token:jwt,refresh_token:'callback-test-refresh',expires_in:3600,token_type:'bearer',user}});
+  });
+  await page.addInitScript(key=>{if(!sessionStorage.getItem('callback-seeded')){localStorage.setItem(key+'-code-verifier',JSON.stringify('test-verifier'));sessionStorage.setItem('callback-seeded','yes');}},authKey);
+  await page.goto(destination+'?code=test-authorization-code');
+  await expect(page.getByRole('button',{name:'Account: Callback Reader'})).toBeVisible();
+  await expect(page).not.toHaveURL(/code=/);
+  expect(exchanges).toBe(1);
+  if(destination==='/auth/callback') await expect(page).toHaveURL(/\/profile$/);
+  await page.reload();
+  await expect(page.getByRole('button',{name:'Account: Callback Reader'})).toBeVisible();
+  await page.goto('/auth/callback');
+  await expect(page).toHaveURL(/\/profile$/);
+  await expect(page.getByLabel('Account email')).toHaveValue('callback@example.test');
+  expect(exchanges).toBe(1);
+ });
+}
