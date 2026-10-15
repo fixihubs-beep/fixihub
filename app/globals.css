@@ -7774,3 +7774,9 @@ body:has(.queue-floating) { padding-bottom: 110px; }
  .login-edition { display: none; }
  .google-login-page .login-card { padding: 22px; }
 }
+
+.feedback-float{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:20px;z-index:40;display:flex;align-items:center;gap:8px;min-height:44px;padding:11px 16px;border:1px solid var(--line);border-radius:28px;background:var(--surface,#fff);color:var(--ink,#111);box-shadow:0 4px 18px #0002;font-size:12px;cursor:pointer}
+@media(max-width:640px){.feedback-float{left:12px;bottom:calc(12px + env(safe-area-inset-bottom));padding:10px 12px}.feedback-float span{display:none}}
+
+@media(max-width:640px){body:has(.queue-floating) .feedback-float{bottom:calc(116px + env(safe-area-inset-bottom))}}
+@media(max-width:640px){.feedback-float{left:auto;right:12px}}

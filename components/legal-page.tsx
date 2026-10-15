@@ -186,6 +186,11 @@ function PrivacyContent() {
         </ul>
       </section>
 
+      <section className="legal-section" id="support-notifications">
+        <h2>Operational notifications and feedback</h2>
+        <p>We use a restricted staff Telegram group for new-account, order, payment and support notifications. These can include your name, email, delivery address, phone number, order quantity and ID, uploaded payment proof, and feedback message. Telegram processes copies of these notifications so our team can handle orders and support requests. Feedback also includes the website page where it was submitted.</p>
+        <p>Do not include passwords or bank login details in feedback. Payment proofs remain subject to staff verification; sending a notification does not confirm payment.</p>
+      </section>
       <section className="legal-section" id="third-parties">
         <h2>6. Third-Party Service Providers</h2>
         <p>

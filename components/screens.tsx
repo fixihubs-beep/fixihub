@@ -1320,9 +1320,7 @@ export function About() {
       </p>
       <h2>How does payment work?</h2>
       <p>
-        The planned flow is a merchant QR payment followed by a receipt upload.
-        Staff checks the transfer before confirming the preorder. This preview
-        has no payment destination: please do not transfer money.
+        When checkout is open, pay the exact order total using the merchant QR or bank details shown on your order. Upload your JPG, PNG or PDF receipt (maximum 10 MB). Staff verifies the transfer against bank records before confirming your preorder.
       </p>
       <h2>What about postage and limits?</h2>
       <p>
@@ -1332,15 +1330,11 @@ export function About() {
       </p>
       <h2>Can I cancel?</h2>
       <p>
-        In the preview, unpaid orders can be cancelled before evidence is under
-        review. Paid orders can request a refund for admin review. Final
-        cancellation and refund terms will be published before launch.
+        Eligible unpaid orders can be cancelled from My orders. For a confirmed order, submit a refund request for administrator review. A request does not mean a refund has been approved or paid.
       </p>
       <h2>Your details</h2>
       <p>
-        Use fictional names, contact details and receipts while testing. Preview
-        records stay in this browser. The production privacy notice, retention
-        policy and official support contact are pending.
+        Sign in with Google and provide accurate contact and delivery details. Your orders and receipts are stored securely in the shared order system. See our Privacy Policy for how we use your information.
       </p>
       <h2>Other books and artwork</h2>
       <p>

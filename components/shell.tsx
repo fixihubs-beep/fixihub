@@ -14,6 +14,8 @@ import {
   Download,
 } from "lucide-react";
 import { useHub } from "./provider";
+import { can } from "@/lib/preorder";
+import { FeedbackButton } from "./feedback-button";
 import { AccountMenu } from "./account-menu";
 import { FixiLoading } from "./fixi-feedback";
 type InstallEvent = Event & {
@@ -84,6 +86,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ["/catalog", "All books"],
             ["/preorders", "Preorders"],
             ["/orders", "My orders"],
+            ...(can(h.profile, "review") ? [["/admin", "Admin"]] : []),
           ].map(([url, label]) => (
             <Link key={url} href={url} className={path === url ? "active" : ""}>
               {label}
@@ -199,6 +202,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </a>
         </div>
       </footer>
+      <FeedbackButton />
       {h.toast && (
         <div className="toast" role="status">
           {h.toast}

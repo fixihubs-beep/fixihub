@@ -103,9 +103,9 @@ export function Admin() {
     return (
       <Empty
         title="The publisher workspace"
-        text="Staff, admin and superadmin accounts have access. Choose a preview identity to test permissions."
+        text="Sign in with your Google account. Workspace access is assigned to staff, admins and superadmins by an administrator."
         href="/account"
-        label="Choose account"
+        label="Sign in with Google"
       />
     );
   const manager = can(h.profile, "catalog"),
@@ -173,7 +173,7 @@ export function Admin() {
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "kacau-preview-orders.csv";
+    a.download = "fixihub-orders.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -271,7 +271,7 @@ export function Admin() {
           <ShieldCheck />
           <div>
             <b>FIXIHUB</b>
-            <small>{h.profile?.role} · {h.demo ? "preview" : "live"}</small>
+            <small>{h.profile?.role} · Live</small>
           </div>
         </div>
         <nav aria-label="Workspace navigation">
@@ -299,7 +299,7 @@ export function Admin() {
             <br />
             1,000 copies. No reprint.
           </p>
-          <a href="/account">{h.demo ? "Switch preview identity" : "Your account"} ↗</a>
+          <a href="/account">Your account ↗</a>
         </div>
       </aside>
       <section className="admin-content">
@@ -317,7 +317,7 @@ export function Admin() {
         </div>
         <div className="workspace-mode">
           <span className="workspace-dot" />
-          Preview workspace <span>Device-local records · no real payments</span>
+          {h.backendReady ? "Live workspace" : "Workspace connection unavailable"}<span>{h.backendReady ? "Shared Supabase records" : "Reconnect to load current records"} · {h.commerceAvailable ? "Preorders open" : "Preorders closed"}</span>
         </div>
         {["orders", "payments", "catalog", "people", "audit"].includes(tab) && (
           <div className="workspace-toolbar">
@@ -349,6 +349,7 @@ export function Admin() {
                     : [
                         "awaiting_payment",
                         "payment_review",
+                        "payment_issue",
                         "confirmed",
                         "preparing",
                         "refund_requested",
@@ -378,7 +379,7 @@ export function Admin() {
                 [
                   String(Math.max(0, CAPACITY - (c?.reserved || 0))),
                   "Copies available",
-                  "Preview inventory",
+                  "Live inventory",
                 ],
                 [
                   String(c?.reserved || 0),
@@ -414,7 +415,7 @@ export function Admin() {
             <div className="preview-notice">
               <ClockIcon />
               <p>
-                {h.demo ? "Preview records only. No real payments are collected." : "Shared orders and receipts. Verify each transfer against bank records before approval. Refund actions record a refund you have completed separately."}
+                Shared orders and receipts. Verify each transfer against bank records before approval. Refund actions record a refund you have completed separately.
               </p>
             </div>
             {tab === "overview" && (
@@ -662,7 +663,7 @@ export function Admin() {
                   setError("");
                 }}
               >
-                Edit preview schedule
+                Edit preorder schedule
               </button>
               <button
                 disabled={busy}
@@ -684,9 +685,7 @@ export function Admin() {
         {tab === "people" && manager && (
           <div className="panel">
             <p>
-              Mock identities only. Real invitations and Google login are
-              deferred. Admins manage customer/staff roles; superadmins manage
-              elevated roles.
+              Real Google accounts appear here after their first sign-in. Admins manage customer/staff roles; superadmins manage elevated roles.
             </p>
             <div className="table-scroll">
               <table>
@@ -793,7 +792,7 @@ export function Admin() {
             <h2>Launch controls</h2>
             <div className="summary-line">
               <span>Authentication</span>
-              <b>{h.demo ? "Mock preview" : "Google via Supabase"}</b>
+              <b>Google via Supabase</b>
             </div>
             <div className="summary-line">
               <span>Payment destination</span>
@@ -808,11 +807,11 @@ export function Admin() {
               <b>{h.commerceAvailable ? "Open" : "Closed"}</b>
             </div>
             <p className="fineprint">
-              A live build fails closed while the Supabase transaction model,
-              RLS, real authentication, merchant QR and final policies are
-              pending. No service keys or payment account secrets belong in this
-              browser.
+              Configure the merchant QR and bank details above, then set the opening window in Campaigns. Checkout requires the database, receipt server and merchant payment details to be ready.
             </p>
+            <div className="summary-line"><span>Shared database</span><b>{h.backendReady ? "Connected" : "Unavailable"}</b></div>
+            <div className="summary-line"><span>Receipt verification server</span><b>{h.receiptServerReady ? "Configured" : "Server key required"}</b></div>
+            <div className="summary-line"><span>Merchant QR and payee</span><b>{h.payment?.qr_url && h.payment?.payee ? "Configured" : "Upload QR and save bank details"}</b></div>
             <h3 className="spaced">Role boundaries</h3>
             <div className="workspace-role-grid">
               <div>
@@ -982,8 +981,7 @@ export function Admin() {
             }}
           >
             <p>
-              All inputs use Malaysia time (UTC+08:00). These are preview dates
-              until the launch window is confirmed.
+              All inputs use Malaysia time (UTC+08:00). Saving changes updates the live preorder window.
             </p>
             {(["opens_at", "closes_at"] as const).map((key) => (
               <label key={key}>
@@ -1076,7 +1074,7 @@ export function Admin() {
                   onChange={(e) => setChecked(e.target.checked)}
                 />
                 I checked the payee, amount and reference against the bank
-                record (simulated in preview).
+                record before approving.
               </label>
               <label>
                 Decision note / rejection reason
@@ -1231,7 +1229,7 @@ export function Admin() {
           {["refund_requested", "payment_issue"].includes(order.status) && (
             <p className="fineprint">
               Only record completion after the manual refund has been sent.
-              Include its reference. This preview does not transfer funds.
+              Include its reference. Recording a refund does not transfer funds; complete it through your bank first.
             </p>
           )}
           <p className="fineprint">

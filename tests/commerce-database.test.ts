@@ -12,6 +12,7 @@ test('live commerce enforces identity, stock, postage, private receipts and staf
  create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text,metadata jsonb); alter table storage.objects enable row level security;
  grant usage on schema auth,storage to authenticated; grant execute on function auth.uid() to authenticated; grant select,insert on storage.objects to authenticated;`);
  await db.exec(readFileSync('supabase/production/commerce.sql','utf8'));
+ await db.exec(readFileSync('supabase/production/telegram.sql','utf8'));
  const ids=Array.from({length:3},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
  for(const id of ids) await db.query(`insert into auth.users values($1,'reader@example.test','{"providers":["google"]}','{"full_name":"Reader"}')`,[id]);
  async function as(id:string){await db.exec('reset role; set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);}
@@ -44,6 +45,48 @@ test('live commerce enforces identity, stock, postage, private receipts and staf
  await db.exec('reset role');await db.query("update fixihub_live.profiles set role='staff' where id=$1",[ids[1]]);
  await as(ids[1]);await call('payment.review',{id:snap.payments[0].id,approve:true,note:'Bank checked',bank_checked:true});
  await as(ids[0]);assert.equal((await call('snapshot')).orders[0].status,'confirmed');
+ // Verify administrative mutations through the real SQL boundary, not only hidden UI.
+ const bookId='00000000-0000-4000-8000-000000000009';
+ await assert.rejects(call('catalog.update',{id:bookId,title:'KACAU',author:'Ariff Adly',description:'Edition',active:true}),/Admin/);
+ await assert.rejects(call('campaign.update',{active:false}),/Admin/);
+ await as(ids[2]);await call('snapshot');
+ await db.exec('reset role');await db.query("update fixihub_live.profiles set role='admin' where id=$1",[ids[1]]);
+ await as(ids[1]);
+ await call('catalog.update',{id:bookId,title:'KACAU: Movie Tie-In',author:'Ariff Adly',description:'Updated edition description',active:true});
+ assert.equal((await call('snapshot')).books.find((b:any)=>b.id===bookId).description,'Updated edition description');
+ await assert.rejects(call('access.update',{id:ids[2],role:'superadmin',active:true}),/Superadmin/);
+ await call('access.update',{id:ids[2],role:'staff',active:true});
+ await as(ids[2]);assert.equal((await call('snapshot')).profile.role,'staff');
+ await as(ids[1]);
+ await call('campaign.update',{active:false,opens_at:new Date(Date.now()-86400000).toISOString(),closes_at:new Date(Date.now()+86400000).toISOString()});
+ assert.equal((await call('snapshot')).payment.enabled,false);
+ await call('campaign.update',{active:true,opens_at:new Date(Date.now()-86400000).toISOString(),closes_at:new Date(Date.now()+86400000).toISOString()});
+ // Notification records are transactional and cannot be read or claimed by customers/staff.
+ await assert.rejects(db.query('select * from fixihub_live.notifications'),/permission denied/);
+ await assert.rejects(db.query("select public.fixihub_notification_job('claim')"),/permission denied/);
+ const feedbackId='90000000-0000-4000-8000-000000000001';
+ await db.query("select public.fixihub_feedback($1,'Website issue','Please check the checkout layout.','/cart')",[feedbackId]);
+ await db.query("select public.fixihub_feedback($1,'Website issue','Please check the checkout layout.','/cart')",[feedbackId]);
+ for(let i=2;i<=3;i++) await db.query("select public.fixihub_feedback($1,'Feedback','Here is another suggestion.','/')",[`90000000-0000-4000-8000-00000000000${i}`]);
+ await assert.rejects(db.query("select public.fixihub_feedback('90000000-0000-4000-8000-000000000004','Feedback','Too many feedback messages.','/')"),/wait ten minutes/);
+ await db.exec('reset role');
+ const counts=(await db.query<{kind:string,n:number}>("select kind,count(*)::int n from fixihub_live.notifications group by kind")).rows;
+ assert.equal(counts.find(x=>x.kind==='LOGIN')?.n,3);
+ assert.equal(counts.find(x=>x.kind==='ORDER')?.n,1);
+ assert.equal(counts.find(x=>x.kind==='PAYMENT')?.n,1);
+ assert.equal(counts.find(x=>x.kind==='FEEDBACK')?.n,3);
+ await db.exec('set role service_role');
+ const own=(await db.query<{j:any}>('select public.fixihub_notification_claim_for_user($1) j',[ids[2]])).rows[0].j;
+ assert.equal(own.kind,'LOGIN');assert.equal(own.source_id,ids[2]);
+ assert.equal((await db.query<{j:any}>('select public.fixihub_notification_claim_for_user($1) j',[ids[2]])).rows[0].j,null);
+ await db.query("select public.fixihub_notification_job('retry',$1,$2,'retry test',30)",[own.id,own.lease]);
+ assert.equal((await db.query<{j:any}>('select public.fixihub_notification_claim_for_user($1) j',[ids[2]])).rows[0].j,null);
+ const claimed=(await db.query<{j:any}>("select public.fixihub_notification_job('claim') j")).rows[0].j;
+ const next=(await db.query<{j:any}>("select public.fixihub_notification_job('claim') j")).rows[0].j;
+ assert.notEqual(next.id,claimed.id);
+ await db.query("select public.fixihub_notification_job('sent',$1,$2)",[claimed.id,claimed.lease]);
+ await db.exec('reset role');
+ assert.ok((await db.query<{sent_at:string}>("select sent_at from fixihub_live.notifications where id=$1",[claimed.id])).rows[0].sent_at);
  // A full queue never admits a 51st simultaneous active customer.
  await db.exec("reset role; update fixihub_live.queue set state='complete'");
  for(let i=10;i<61;i++) {

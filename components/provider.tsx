@@ -18,6 +18,7 @@ type Hub = {
   commerceAvailable: boolean;
   paymentReady: boolean;
   backendReady: boolean;
+  receiptServerReady: boolean;
   payment: PaymentSetup | null;
   ready: boolean;
   error: string;
@@ -84,7 +85,7 @@ export function Provider({ children }: { children: React.ReactNode }) {
         try { const value = JSON.parse(sessionStorage.getItem(CART + (owner.current || "guest")) || "[]"); if (Array.isArray(value)) saved = value; } catch {}
         setCart(saved); setData(emptyData());
       }
-      setProfile(user); setError("");
+      setProfile(current => current?.id === user?.id && current && user ? { ...user, role: current.role, active: current.active } : user); setError("");
       try {
         const [snapshot, server] = await Promise.all([
           liveCall<LiveSnapshot>(user ? "snapshot" : "catalog"),
@@ -96,7 +97,7 @@ export function Provider({ children }: { children: React.ReactNode }) {
         setProfile(snapshot.profile || user); setPayment(merchant); setBackendReady(true); setServerReady(server.ready === true);
       } catch {
         if (!alive.current || version !== generation.current) return;
-        setData(emptyData()); setBackendReady(false); setServerReady(false); setPayment(null);
+        setProfile(user); setData(emptyData()); setBackendReady(false); setServerReady(false); setPayment(null);
       }
     } catch(e) {
       if (alive.current && version === generation.current) {
@@ -123,7 +124,8 @@ export function Provider({ children }: { children: React.ReactNode }) {
   useEffect(() => { if (!ready) return; const timer=setInterval(() => void refresh(),15000); return () => clearInterval(timer); },[ready,profile?.id]);
   useEffect(() => { if (!toast) return; const timer=setTimeout(() => notify(""),6000); return () => clearTimeout(timer); },[toast]);
   const paymentReady = backendReady && serverReady && !!payment?.payee && !!payment?.qr_url;
-  const commerceAvailable = paymentReady && !!payment?.enabled;
+  const campaign = data.campaigns.find(c => c.book_id === KACAU_ID);
+  const commerceAvailable = paymentReady && !!payment?.enabled && !!campaign?.active && Date.now() >= Date.parse(campaign.opens_at) && Date.now() < Date.parse(campaign.closes_at);
   async function logout() {
     if (!supabase) throw Error("Sign-in is not configured.");
     const id=owner.current;
@@ -166,7 +168,7 @@ export function Provider({ children }: { children: React.ReactNode }) {
     if(result.error) throw Error("Your name could not be saved. Please try again.");
     await refresh(); notify("Profile saved.");
   }
-  return <Context.Provider value={{data,profile,demo:false,commerceAvailable,paymentReady,backendReady,payment,ready,error,toast,cart,notify,setCart,add,placeOrder,upload,receipt,logout,updateName,refresh,
+  return <Context.Provider value={{data,profile,demo:false,commerceAvailable,paymentReady,backendReady,receiptServerReady:serverReady,payment,ready,error,toast,cart,notify,setCart,add,placeOrder,upload,receipt,logout,updateName,refresh,
     review:(id,approve,note)=>change("payment.review",{id,approve,note,bank_checked:approve},approve?"Payment approved.":"Receipt rejected with correction instructions."),
     transition:(id,action,note)=>change("order.transition",{id,action,note},"Order updated."),
     saveBook:book=>change("catalog.update",book,"Catalog saved."),
