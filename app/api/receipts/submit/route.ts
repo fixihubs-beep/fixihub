@@ -1,8 +1,10 @@
+import { after } from "next/server";
+import { dispatchNotifications } from "@/lib/telegram";
 import { createClient } from "@supabase/supabase-js";
 import { RECEIPT_LIMIT, RECEIPT_TYPES, validateReceiptSignature } from "@/lib/receipt-validation";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 const reply = (error: string, status: number) => Response.json({ error }, { status, headers: { "Cache-Control": "no-store" } });
 export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,6 +34,7 @@ export async function POST(request: Request) {
     const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
     const result = await admin.rpc("fixihub_finalize_receipt", { p_user: user.id, p_path: path, p_reference: reference.trim() });
     if (result.error) return reply(result.error.code === "23505" ? "This receipt or transfer reference has already been submitted. Refresh your orders." : result.error.message, 409);
+    after(async () => { try { await dispatchNotifications(user.id); } catch { console.warn("Payment notification queued for backup delivery."); } });
     return Response.json(result.data, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return reply("Receipt could not be verified. Use a valid JPG, PNG or PDF and try again. If you already paid, do not pay again.", 400);

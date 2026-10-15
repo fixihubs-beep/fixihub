@@ -12,6 +12,7 @@ for (const role of ['customer','staff','admin','superadmin']) {
   await page.route('**/api/commerce-status',r=>r.fulfill({json:{ready:false}}));
   let snapshots=0;
   await page.route('**/rest/v1/rpc/**',async r=>{
+   if(r.request().url().endsWith('fixihub_feedback')) return r.fulfill({json:{id:r.request().postDataJSON().p_id}});
    if(r.request().url().endsWith('fixihub_payment_settings')) return r.fulfill({json:payment});
    snapshots++;
    return r.fulfill({json:{books:initialData.books,campaigns:initialData.campaigns.map(c=>({...c,active:false})),profile,profiles:[profile],orders:[],payments:[],events:[],payment}});
@@ -35,9 +36,25 @@ for (const role of ['customer','staff','admin','superadmin']) {
    await workspace.getByRole('button',{name:'Security',exact:true}).click();
    await expect(page.getByRole('heading',{name:'Merchant QR & bank details'})).toBeVisible();
    await expect(page.getByText('Server key required', {exact:true})).toBeVisible();
+   await page.getByRole('button',{name:'Send feedback or report an issue'}).click();
+   await page.getByLabel('Your message').fill('The order page needs a little help.');
+   await page.getByRole('button',{name:'Send feedback',exact:true}).click();
+   await expect(page.getByText('Thanks. Your message has been saved.')).toBeVisible();
+   await page.getByRole('button',{name:'Close dialog',exact:true}).click();
    const before=snapshots;
    await expect.poll(()=>snapshots,{timeout:20000}).toBeGreaterThan(before);
    await expect(page.locator('.admin-heading h1')).toHaveText('Security');
   }
  });
 }
+
+test('mobile guest can open feedback and is directed to Google sign-in',async({page})=>{
+ await page.route('**/rest/v1/rpc/**',r=>r.fulfill({status:404,json:{code:'PGRST202'}}));
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/account');
+ await page.getByRole('button',{name:'Send feedback or report an issue'}).click();
+ await expect(page.getByRole('dialog')).toContainText('Sign in so we can connect your message');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+ await page.getByRole('dialog').getByRole('link',{name:'Sign in with Google'}).click();
+ await expect(page.getByRole('button',{name:'Continue with Google',exact:true})).toBeVisible();
+});

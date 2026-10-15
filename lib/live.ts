@@ -1,7 +1,9 @@
+import { wakeNotifications } from "./notification-client";
 import { supabase } from "./supabase";
 import type { Data, Profile } from "./types";
 export type PaymentSetup = { enabled: boolean; qr_url: string; payee: string; support: string; bank_name?: string; account_number?: string; instructions?: string };
 export type LiveSnapshot = Partial<Data> & { profile?: Profile; payment: PaymentSetup };
+const registrationWake = new Set<string>();
 export async function liveCall<T = unknown>(action: string, data: object = {}): Promise<T> {
   if (!supabase) throw Error("The store connection is unavailable.");
   const result = await supabase.rpc("fixihub_live", { p_action: action, p_data: data });
@@ -9,6 +11,11 @@ export async function liveCall<T = unknown>(action: string, data: object = {}): 
     if (["PGRST202", "42883", "3F000"].includes(result.error.code)) throw Error("The order system is being configured. Please check back shortly.");
     if (result.error.code === "23505") throw Error("This order or transfer reference has already been submitted. Refresh your orders before retrying.");
     throw Error(result.error.message || "The request could not be completed.");
+  }
+  if(action === "order.create") void wakeNotifications();
+  if(action === "snapshot") {
+    const id = (result.data as LiveSnapshot)?.profile?.id;
+    if(id && !registrationWake.has(id)) { registrationWake.add(id); void wakeNotifications(); }
   }
   return result.data as T;
 }
